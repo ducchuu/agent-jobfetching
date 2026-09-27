@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+apscheduler
+pydantic
+pydantic-settings
+litellm
+langfuse
+python-jobspy
+pandas
+httpx
+pymupdf
+pytest
+pytest-asyncio
+python-multipart

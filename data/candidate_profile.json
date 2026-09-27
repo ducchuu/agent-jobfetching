@@ -1,0 +1,79 @@
+{
+  "name": "Mikolaj Duchlinski",
+  "skills": [
+    "Python",
+    "Reinforcement Learning",
+    "Evolutionary Algorithms",
+    "VHDL",
+    "Embedded Systems",
+    "Data Wrangling",
+    "Natural Language Processing",
+    "SQL",
+    "Data Visualization",
+    "3D Printing",
+    "Machine Learning",
+    "Project Management"
+  ],
+  "languages": [
+    "Polish",
+    "English",
+    "Spanish",
+    "French"
+  ],
+  "projects": [
+    {
+      "name": "Autonomous Drone Navigation & Hardware Deployment",
+      "technologies": [
+        "Raspberry Pi",
+        "Python",
+        "3D printing"
+      ],
+      "description": "Constructing a 3 and 5-inch quadcopter with real-time autonomous flight navigation using pre-trained PPO models."
+    },
+    {
+      "name": "Power-Aware Co-Optimization of Unconventional Hexacopters via Evolution and Learning",
+      "technologies": [
+        "Python",
+        "PyTorch",
+        "Reinforcement Learning"
+      ],
+      "description": "Designed a bi-objective evolutionary framework to co-optimize physical hexacopter morphologies and neural network controllers."
+    },
+    {
+      "name": "Pulse - personalized content feed",
+      "technologies": [
+        "Python",
+        "Flask",
+        "SQLite",
+        "NLP"
+      ],
+      "description": "Architected a full-stack platform for personalized content using various APIs and developed an NLP enrichment engine."
+    },
+    {
+      "name": "Autonomous Solar-Powered Mars Rover",
+      "technologies": [
+        "VHDL",
+        "FPGA",
+        "PWM Control"
+      ],
+      "description": "Designed a digital control system for an autonomous robot using VHDL, including power management systems."
+    },
+    {
+      "name": "Voice-Driven Conversational AI Pipeline",
+      "technologies": [
+        "NLP",
+        "BERT",
+        "OpenAI Whisper"
+      ],
+      "description": "Engineered an end-to-end voice-interactive recipe recommendation system with integrated dialogue management."
+    }
+  ],
+  "experience_summary": "Mikolaj has experience as a Project Manager Intern, managing tasks such as budgeting and project coordination, alongside operational roles in the food and beverage industry, focusing on efficiency and process improvement.",
+  "target_job_titles": [
+    "AI Engineer",
+    "Embedded Systems Engineer",
+    "Robotics Software Engineer",
+    "Data Engineer",
+    "Machine Learning Engineer"
+  ]
+}
