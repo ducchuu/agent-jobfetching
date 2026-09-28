@@ -42,7 +42,19 @@ The agent uses a local SQLite database (`data/jobs.db`) to keep track of which j
 
 ## Guidance to run
 
-### 1. Deployment
+### 1. Personalize
+The project is based on the prompt engineering through the pipeline, therefore the prompts have to be adjusted to match the candidates needs. In my case, I do not have any work experience, as a job, therefore I specify how to handle this and describe instructions on how to calculate the match score.
+
+Hence you should update:
+
+`app/services/cv_parser.py`
+
+and
+
+`app/agent/matcher.py`
+
+
+### 2. Deployment
 The project includes a `docker-compose.yml` configured to run the API and optionally expose it via a Cloudflare Tunnel.
 
 1. **Set up `.env`:** Ensure your `.env` file is fully configured, including your `CLOUDFLARE_TUNNEL_TOKEN`.
@@ -60,7 +72,7 @@ The project includes a `docker-compose.yml` configured to run the API and option
    ```
 
 
-### 2. Local Development (Without Docker)
+### 3. Local Development (Without Docker)
 1. **Create and activate a virtual environment:**
    ```bash
    python -m venv venv

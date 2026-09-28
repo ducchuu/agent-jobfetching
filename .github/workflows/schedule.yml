@@ -1,0 +1,19 @@
+name: Scheduled Job Fetcher
+
+on:
+  schedule:
+    # Runs every day at 9:00 AM UTC. 
+    # (Adjust the cron schedule to whatever you need)
+    - cron: '0 9 * * *'
+    
+  # Allows you to manually trigger it from the GitHub Actions tab
+  workflow_dispatch: 
+
+jobs:
+  run-scraper:
+    runs-on: self-hosted
+
+    steps:
+      - name: Run Job Scraper Script in Docker
+        # This executes the script inside the already-running API container
+        run: docker exec job_fetching_agent_api python run_job_scraper.py

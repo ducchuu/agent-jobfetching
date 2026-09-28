@@ -1,0 +1,36 @@
+name: Deploy to Home Server
+
+on:
+  push:
+    branches:
+      - main # Triggers when you push to main
+
+jobs:
+  deploy:
+    # This is the magic word that tells GitHub to use YOUR home server
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # The codebase is now pulled to your server. We just need to build/start it.
+      # Note: We create a .env file on the fly using GitHub Secrets to keep your API keys secure.
+      - name: Create .env file
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+          echo "LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}" >> .env
+          echo "LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}" >> .env
+          echo "LANGFUSE_HOST=${{ secrets.LANGFUSE_HOST }}" >> .env
+          echo "DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}" >> .env
+          echo "MATCH_THRESHOLD=${{ secrets.MATCH_THRESHOLD }}" >> .env
+          echo "CLOUDFLARE_TUNNEL_TOKEN=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" >> .env
+
+      - name: Build and Start Docker Containers
+        run: |
+          docker-compose down
+          docker-compose up -d --build
+
+      - name: Clean up old Docker images (optional but recommended)
+        run: docker image prune -f
