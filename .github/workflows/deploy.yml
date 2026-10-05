@@ -3,19 +3,16 @@ name: Deploy to Home Server
 on:
   push:
     branches:
-      - main # Triggers when you push to main
+      - main
 
 jobs:
   deploy:
-    # This is the magic word that tells GitHub to use YOUR home server
-    runs-on: self-hosted
+    runs-on: self-hosted #because I deploy it on my home server, which I connected in GitHub actions
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      # The codebase is now pulled to your server. We just need to build/start it.
-      # Note: We create a .env file on the fly using GitHub Secrets to keep your API keys secure.
+        
       - name: Create .env file
         run: |
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env

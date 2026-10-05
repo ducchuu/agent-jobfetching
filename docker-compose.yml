@@ -10,7 +10,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - db_data:/app/data
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -19,3 +19,6 @@ services:
     command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - api
+
+volumes:
+  db_data:
