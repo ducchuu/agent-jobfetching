@@ -8,6 +8,14 @@ class JobPosting(BaseModel):
     description: str
     url: str
 
+class LanguageFilterResult(BaseModel):
+    is_rejected: bool = Field(..., description="True if the job is written in a language the candidate doesn't speak, or requires a language they don't have.")
+    reason: str = Field(..., description="Explanation for the decision.")
+
+class ExperienceFilterResult(BaseModel):
+    is_rejected: bool = Field(..., description="True if the job requires Senior/Lead/Manager or more corporate experience than the target.")
+    reason: str = Field(..., description="Explanation for the decision.")
+
 class MatchResult(BaseModel):
     chain_of_thought: str = Field(..., description="Step-by-step reasoning evaluating language, experience, and skills")
     score: int = Field(..., description="Match score from 0 to 100")

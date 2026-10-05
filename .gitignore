@@ -38,3 +38,5 @@ data/*.sqlite3
 .vscode/
 *.swp
 *.swo
+
+.DS_STORE
