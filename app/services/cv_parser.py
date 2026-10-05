@@ -48,7 +48,7 @@ async def extract_profile_from_pdf(pdf_path: str) -> CandidateProfile:
     
     logger.info("Calling LLM to extract structured profile...")
     response = await router.acompletion(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
     )

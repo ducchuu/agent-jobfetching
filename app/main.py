@@ -86,6 +86,14 @@ async def trigger_pipeline(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_job_matching_pipeline)
     return {"message": "Pipeline triggered in the background."}
 
+@app.get("/profile")
+async def get_profile():
+    if not os.path.exists(CACHE_PATH):
+        return {"status": "error", "message": "No profile found on the server."}
+    with open(CACHE_PATH, "r") as f:
+        candidate_profile = CandidateProfile.model_validate_json(f.read())
+    return {"status": "ok", "profile": candidate_profile.model_dump()}
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Job Fetching Agent is running."}
