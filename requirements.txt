@@ -11,4 +11,5 @@ httpx
 pymupdf
 pytest
 pytest-asyncio
-python-multipartlangdetect
+python-multipart
+langdetect
