@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.schemas import CandidateProfile
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO)
@@ -27,8 +28,8 @@ async def run_job_matching_pipeline():
 
     inferred_titles = candidate_profile.target_job_titles if candidate_profile.target_job_titles else ["AI Engineer", "Data Engineer"]
 
-    # Define multiple locations you want to fetch jobs from
-    locations = ["Netherlands"] # Add more like "Berlin", "London" later
+    # You can define multiple locations you want to fetch jobs from, but they have to match jobspy API
+    locations = ["Netherlands"]
     
     jobs = []
     for loc in locations:
@@ -38,26 +39,31 @@ async def run_job_matching_pipeline():
             job_type="fulltime"
         ))
     
-    for job in jobs:
-        if is_job_processed(job.id): # We are checking the database, whether the job was already analyzed, so that the LLM API doesn't have to be called twice or more times for the same task (analysis of the same job posting)
+    sem = asyncio.Semaphore(5)
+
+    async def process_job(job):
+        if is_job_processed(job.id):
             logger.info(f"Skipping already processed job: {job.id}")
-            continue
+            return
             
-        logger.info(f"Evaluating job: {job.title} at {job.company}")
-        try:
-            match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
-            
-            if getattr(match_result, 'auto_reject', False):
-                logger.info(f"Auto-rejected senior/heavy YoE role: {job.title}")
-                mark_job_processed(job.id)
-                continue
+        async with sem:
+            logger.info(f"Evaluating job: {job.title} at {job.company}")
+            try:
+                match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
                 
-            if match_result.score >= settings.MATCH_THRESHOLD:
-                logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
-                await send_discord_alert(job, match_result)
-            mark_job_processed(job.id)
-        except Exception as e:
-            logger.error(f"Error evaluating job {job.id}: {e}")
+                if getattr(match_result, 'auto_reject', False):
+                    logger.info(f"Auto-rejected senior/heavy YoE role: {job.title}")
+                    mark_job_processed(job.id)
+                    return
+                    
+                if match_result.score >= settings.MATCH_THRESHOLD:
+                    logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
+                    await send_discord_alert(job, match_result)
+                mark_job_processed(job.id)
+            except Exception as e:
+                logger.error(f"Error evaluating job {job.id}: {e}")
+
+    await asyncio.gather(*(process_job(job) for job in jobs))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -12,15 +12,14 @@ def fetch_daily_jobs(
     
     logger.info(f"Scraping jobs for dynamic titles: {target_job_titles}")
     
-    # Wraps each title in quotes: '"AI Engineer" OR "Robotics Software Engineer"'
     search_query = " OR ".join([f'"{title}"' for title in target_job_titles])
     
-    # Scrape across LinkedIn and Indeed, because JobSpy API doesn't support magnet.me 
+    # scrape across only LinkedIn and Indeed, because JobSpy API doesn't support magnet.me 
     jobs_df = scrape_jobs(
         site_name=["linkedin", "indeed"],
         search_term=search_query,
         location=location,
-        results_wanted=40,
+        results_wanted=100,
         hours_old=72, # Only jobs posted in the last 3 days
         country_indeed='Netherlands',
         linkedin_fetch_description=True # Forces LinkedIn to fetch descriptions to avoid nan
@@ -28,13 +27,13 @@ def fetch_daily_jobs(
     
     import pandas as pd
     
-    # Eliminate duplicates based on job title and company
+    # eliminate duplicates based on job title and company
     if not jobs_df.empty:
         jobs_df = jobs_df.drop_duplicates(subset=['title', 'company'])
     
     job_postings = []
     for _, row in jobs_df.iterrows():
-        # Ensure we have the minimum viable data
+        # ensure we have the minimum viable data
         if pd.isna(row.get('description')) or not str(row.get('description')).strip() or str(row.get('description')).lower() == 'nan':
             continue
             

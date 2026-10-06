@@ -40,3 +40,5 @@ data/*.sqlite3
 *.swo
 
 .DS_STORE
+
+REPO_STRUCTURE.md

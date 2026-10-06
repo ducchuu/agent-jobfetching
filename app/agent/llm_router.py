@@ -15,9 +15,9 @@ model_list = [
         }
     },
     {
-        "model_name": "claude-3-5-haiku",
+        "model_name": "claude-4-5-haiku",
         "litellm_params": {
-            "model": "anthropic/claude-3-5-haiku-20241022",
+            "model": "anthropic/claude-4-5-haiku-latest",
             "api_key": settings.ANTHROPIC_API_KEY
         }
     },
@@ -29,9 +29,9 @@ model_list = [
         }
     },
     {
-        "model_name": "claude-3-5-sonnet",
+        "model_name": "claude-5-5-sonnet",
         "litellm_params": {
-            "model": "anthropic/claude-3-5-sonnet-20241022",
+            "model": "anthropic/claude-5-5-sonnet-latest",
             "api_key": settings.ANTHROPIC_API_KEY
         }
     }
@@ -41,7 +41,7 @@ model_list = [
 router = Router(
     model_list=model_list,
     fallbacks=[
-        {"gpt-4o-mini": ["claude-3-5-haiku"]},
-        {"gpt-4o": ["claude-3-5-sonnet"]}
+        {"gpt-4o-mini": ["claude-4-5-haiku"]},
+        {"gpt-4o": ["claude-5-5-sonnet"]}
     ]
 )

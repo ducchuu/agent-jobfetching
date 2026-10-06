@@ -12,10 +12,10 @@ async def extract_profile_from_pdf(pdf_path: str) -> CandidateProfile:
     logger.info(f"Extracting text from {pdf_path}...")
     
     try:
-        doc = pymupdf.open(pdf_path)
-        text = ""
-        for page in doc:
-            text += page.get_text()
+        with pymupdf.open(pdf_path) as doc:
+            text = ""
+            for page in doc:
+                text += page.get_text()
     except Exception as e:
         logger.error(f"Failed to read PDF: {e}")
         raise
@@ -25,10 +25,10 @@ async def extract_profile_from_pdf(pdf_path: str) -> CandidateProfile:
     Your goal is to extract a structured profile.
 
     CRITICAL INSTRUCTIONS:
-    1. Extract all technical projects (academic, thesis, personal) into the 'projects' array.  From the 'projects' array extract relevalnt skills and add them to skills array, if not present yet.
+    1. Extract all technical projects (academic, thesis, personal) into the 'projects' array. From the 'projects' array extract relevant skills and add them to skills array, if not present yet.
     2. Generate 3 to 5 highly specific 'target_job_titles' based on the intersection of their skills. Do NOT use prefixes like 'Junior', 'Entry-level', or 'Graduate'. Just output the core role (e.g., 'AI Engineer', 'Robotics Software Engineer', 'Embedded Systems Engineer'). The pipeline will filter for experience later.
-    3. The 'experience_summary' should briefly mention non-technical work.
-    4. Extract all languages spoken by the candidate (e.g. English, Polish) into the 'languages' array.
+    3. The 'experience_summary' should summarize all work experience (including technical internships or roles alongside non-technical work).
+    4. Extract all languages spoken by the candidate (e.g. English, Polish) into the 'languages' array as bare language names without proficiency levels.
     
     You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
     {{
