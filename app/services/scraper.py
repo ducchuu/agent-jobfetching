@@ -19,7 +19,7 @@ def fetch_daily_jobs(
         site_name=["linkedin", "indeed"],
         search_term=search_query,
         location=location,
-        results_wanted=100,
+        results_wanted=50,
         hours_old=72, # Only jobs posted in the last 3 days
         country_indeed='Netherlands',
         linkedin_fetch_description=True # Forces LinkedIn to fetch descriptions to avoid nan

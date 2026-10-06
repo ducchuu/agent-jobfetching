@@ -17,7 +17,7 @@ model_list = [
     {
         "model_name": "claude-4-5-haiku",
         "litellm_params": {
-            "model": "anthropic/claude-4-5-haiku-latest",
+            "model": "anthropic/claude-haiku-4-5",
             "api_key": settings.ANTHROPIC_API_KEY
         }
     },
@@ -31,7 +31,7 @@ model_list = [
     {
         "model_name": "claude-5-5-sonnet",
         "litellm_params": {
-            "model": "anthropic/claude-5-5-sonnet-latest",
+            "model": "anthropic/claude-sonnet-5-5",
             "api_key": settings.ANTHROPIC_API_KEY
         }
     }
