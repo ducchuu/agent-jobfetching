@@ -1,11 +1,80 @@
 # AI Job Fetching Agent
 
-An automated pipeline designed to scrape, evaluate, and fetch job listings tailored to specific criteria. This project uses web scraping and an AI agent to match job descriptions against user-defined preferences.
+An automated pipeline designed to scrape, evaluate, and fetch job listings daily, and give a matching score tailored to specific criteria. This project uses web scraping and the LLM to match job descriptions against user-defined preferences.
 
 - **Job Scraping**: Automatically fetches job listings (e.g., AI Engineer, Robotics Engineer) in specified locations.
 - **Multi-Agent Evaluation Pipeline**: Analyzes job descriptions using a funnel of multiple specialized AI agents (Language, Experience, and Skills) to accurately determine match scores while optimizing costs.
 - **Dockerized API**: Fully containerized FastAPI backend.
-- **Cloudflare Tunnels**: Ready to be securely exposed to the web using Cloudflare Tunnels.
+- **Cloudflare Tunnels**: Ready to be securely exposed to the web using Cloudflare Tunnels. (optional)
+
+
+## Guidance to run
+
+### 1. Personalize
+The project is based on prompt engineering through the pipeline, therefore the prompts might have to be adjusted to match the candidate's needs, if you profile is different than mine. In my case, I am a recent graduate, I do not have the relevant work experience yet, therefore I specify how to handle this and describe instructions on how to calculate the match score.
+
+Hence you might want to update:
+
+`app/services/cv_parser.py`
+
+and the specific agent files inside `app/agent/`:
+- `language_agent.py`
+- `experience_agent.py`
+- `skills_agent.py`
+
+
+### 2. Quick Start (Local Testing)
+The easiest way to test the pipeline locally is using Docker.
+
+1. **Configure Environment:** 
+   Copy `.env.example` to `.env` and add your API keys (and your DISCORD_WEBHOOK_URL to receive match alerts!).
+2. **Start backend:**
+   ```bash
+   docker-compose up -d --build
+   ```
+3. **Upload a CV:**
+   Use the `/upload-cv` endpoint to parse and cache a candidate profile as json file extracted by the cv parser script.
+   ```bash
+   curl -X POST "http://localhost:8000/upload-cv" \
+        -H "accept: application/json" \
+        -H "Content-Type: multipart/form-data" \
+        -F "file=@/path/to/your/resume.pdf"
+   ```
+4. **Trigger the Pipeline:**
+   Start the multi-agent scraping and evaluation pipeline in the background.
+   ```bash
+   curl -X POST "http://localhost:8000/trigger-pipeline" \
+        -H "accept: application/json" -d ""
+   ```
+5. **Watch the Agents Work:**
+   ```bash
+   docker-compose logs -f api
+   ```
+
+### 3. Advanced Deployment (Production)
+The provided `docker-compose.yml` is already configured to optionally expose the API to the web via a **Cloudflare Tunnel** (cloudflared). This is useful if you are hosting the agent on a home server and want to trigger pipelines remotely or receive webhooks securely without opening router ports.
+
+1. Ensure your `CLOUDFLARE_TUNNEL_TOKEN` is set in your `.env` file.
+2. The `cloudflared` service in `docker-compose.yml` will automatically route external traffic to the internal API container.
+
+
+### 4. Local Development (Without Docker) - in case someone does not have Docker installed; Python 3 is still required though
+1. **Create and activate a virtual environment:**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   ```
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Configure Environment:** 
+   Copy `.env.example` to `.env` and add your API keys (and your DISCORD_WEBHOOK_URL to receive match alerts!).
+4. **Run the API:**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
 
 ## Pipeline Architecture & Data Flow
 
@@ -21,7 +90,7 @@ flowchart TD
     C -- "Senior/Lead or<br/>Too Much Exp Required<br/>(gpt-4o-mini)" --> R2[Auto-Reject]
     
     C -- "Experience OK" --> D[Skills Matcher Agent]
-    D -- "Evaluate Tech Stack & Projects<br/>(claude-3.5-sonnet)" --> E[Final Score & Feedback]
+    D -- "Evaluate Tech Stack & Projects<br/>(gpt-4o)" --> E[Final Score & Feedback]
     
     style R1 fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#000
     style R2 fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#000
@@ -31,11 +100,6 @@ flowchart TD
     style D fill:#cce5ff,stroke:#004085,color:#000
 ```
 
-### The Agents:
-1. **Language Agent**: Uses `langdetect` library to instantly reject jobs written in foreign languages. Falls back to `gpt-4o-mini` to reject English postings that explicitly require foreign language fluency.
-2. **Experience Agent**: Uses `gpt-4o-mini` to strictly enforce YoE constraints and reject over-senior roles.
-3. **Skills Matcher Agent**: Uses flagship models (`claude-3.5-sonnet` or `gpt-4o`) to deeply analyze GitHub projects and technical skills against the JD for the final match score.
-
 ## Project Structure
 
 ```text
@@ -44,7 +108,7 @@ agent_jobfetching/
 │   ├── agent/            # Multi-agent pipeline logic
 │   │   ├── language_agent.py   # Language filter (langdetect & gpt-4o-mini)
 │   │   ├── experience_agent.py # YoE and seniority filter
-│   │   ├── skills_agent.py     # Skills evaluation (claude-3.5-sonnet)
+│   │   ├── skills_agent.py     # Skills evaluation (gpt-4o)
 │   │   └── matcher.py          # Orchestrates the agents in sequence
 │   ├── core/             # Core utilities and settings
 │   ├── models/           # Data models (Pydantic/SQLAlchemy)
@@ -61,64 +125,39 @@ agent_jobfetching/
 └── clear_db.py           # Utility script to reset the database
 ```
 
+
+### The Agents:
+1. **Language Agent**: Uses `langdetect` library set up which allows to instantly reject jobs written in foreign languages. Falls back to `gpt-4o-mini` to reject job postings written in English but explicitly require foreign language fluency. Of course they match the candidate's profile.
+2. **Experience Agent**: Uses `gpt-4o-mini` to strictly enforce Years of Experience (YoE) match and reject roles that are not suitable for candidate. Standard practice is to still try applying roles that require up to 2 years experience more than candidate has, as some skills can be and job positions still can be applicable. More than 2 years of experience gap is automatic rejection.
+3. **Skills Matcher Agent**: Uses flagship models (`gpt-4o`) to deeply analyze GitHub projects and technical skills against the JD for the final match score.
+
+### Cost & Token Optimization
+The pipeline includes several architectural decisions designed to minimize API costs:
+- **Agent Chaining:** Jobs are filtered sequentially. `langdetect` (free) and `experience_agent` (`gpt-4o-mini`, $0.15/1M tokens) act as gatekeepers. The most expensive agent (`skills_agent` running `gpt-4o`) is only triggered for a small fraction of highly relevant jobs, that have been chosen after applying easy filtering.
+- **Prompt Caching:** The `skills_agent` dynamically places the static system prompt (containing the candidate's profile) at the very beginning of the API request. Because jobs are processed sequentially, OpenAI automatically caches this prompt prefix, granting a **50% token discount** and lower latency on all subsequent job evaluations in that batch (Anthropic allows cache prompting too, however their current flag models refuse these prompts because of Privacy and HR use guidelines violation).
+- **JSON Minification:** In `skills_agent.py`, the candidate's complex JSON profile is strictly minified (removing all spaces and newlines) before being sent to the LLM. This saves hundreds of whitespace tokens per API call.
+- **Job Description Boilerplate Stripping:** A regex heuristic in the scraper truncates useless HR text (like "Equal Opportunity Employer", "Benefits & Perks", or "What we offer") from raw job descriptions, which is not really relevant for candidate's match scoring. This saves 300–700 input tokens per evaluated job posting without degrading technical match quality.
+- **Output Token Throttling:** API generation overhead is heavily constrained. Filter agents strictly return an empty string for reasoning if a job passes. The `skills_agent` explicitly enforces single-sentence reasoning fields and sets a strict API `max_tokens` ceiling, slashing output token costs by over 60%.
+
+
+
 ## Utility Scripts
 
 There are 2 seperate `.py` scripts at the root level, like `run_job_scraper.py` and `clear_db.py`. These are used for testing and database management outside the main API loop, useful for anyone running the pipeline.
 
 ### `run_job_scraper.py`
 This script allows you to independently test the job scraping service without running the full AI evaluation pipeline. It fetches jobs for predefined titles (like "AI Engineer", "Robotics Engineer") in a specific location (e.g., "Netherlands") and prints the results directly to your console. 
-- It's great for debugging scraper issues, verifying API keys, and quickly checking what job data is currently available on the market.
+- It is great for debugging scraper issues, verifying API keys, and quickly checking what job data is currently available on the market when retrieving from the API key.
+- It is then also useful prompt engineering for the 3 agents. If you know what data is retrieve, you can speciilize your agents for filtering and scoring correctly.
 
 ### `clear_db.py`
 The agent uses a local SQLite database (`data/jobs.db`) to keep track of which jobs have already been evaluated, ensuring it doesn't process the same job twice. Running this script deletes all records from the `processed_jobs` table.
 - If you want to reset the pipeline state (for example, if you tweaked the AI agent's prompt and want it to re-evaluate jobs it previously skipped), running this script will make the pipeline treat all found jobs as brand new.
+## Demonstration
 
-## Guidance to run
-
-### 1. Personalize
-The project is based on prompt engineering through the pipeline, therefore the prompts have to be adjusted to match the candidate's needs. In my case, I do not have any work experience, as a job, therefore I specify how to handle this and describe instructions on how to calculate the match score.
-
-Hence you should update:
-
-`app/services/cv_parser.py`
-
-and the specific agent files inside `app/agent/`:
-- `language_agent.py`
-- `experience_agent.py`
-- `skills_agent.py`
+When the multi-agent pipeline finds a highly relevant job that passes the language filter, experience gatekeeper, and scores high enough on the skills matcher, it automatically sends a webhook alert to Discord channel. You can read on how to set it up here:
+`https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks`
 
 
-### 2. Deployment
-The project includes a `docker-compose.yml` configured to run the API and optionally expose it via a Cloudflare Tunnel.
 
-1. **Set up `.env`:** Ensure your `.env` file is fully configured, including your `CLOUDFLARE_TUNNEL_TOKEN`.
-2. **Build and Run:**
-   ```bash
-   docker-compose up -d --build
-   ```
-3. **Check Logs:**
-   ```bash
-   docker-compose logs -f api
-   ```
-4. **Shutdown:**
-   ```bash
-   docker-compose down
-   ```
-
-
-### 3. Local Development (Without Docker)
-1. **Create and activate a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   ```
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Configure Environment:**
-   Copy `.env.example` to `.env` and fill in your API keys (e.g., OpenAI API key, SerpApi key).
-4. **Run the API:**
-   ```bash
-   uvicorn app.main:app --reload
-   ```
+![Discord Alert Demonstration](./data/demonstration_discord_alert.png)

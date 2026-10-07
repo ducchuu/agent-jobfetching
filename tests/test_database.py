@@ -22,14 +22,14 @@ def setup_test_db():
 def test_job_processing_logic():
     job_id = "job_123"
     
-    # Assert job is not processed initially
+    # job is not processed initially
     assert not is_job_processed(job_id)
     
-    # Mark it as processed
+    # mark it as processed
     mark_job_processed(job_id)
     
-    # Assert it is now processed
+    # it is now processed
     assert is_job_processed(job_id)
     
-    # Assert duplicate insertion doesn't crash (SQLite INSERT OR IGNORE)
+    # check whetherduplicate insertion doesn't crash (SQLite INSERT OR IGNORE)
     mark_job_processed(job_id)

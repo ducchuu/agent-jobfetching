@@ -12,15 +12,14 @@ def main():
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Count rows before deleting
+        # count rows before deleting 
         cursor.execute("SELECT COUNT(*) FROM processed_jobs")
         count = cursor.fetchone()[0]
         
-        # Delete all records
         cursor.execute("DELETE FROM processed_jobs")
         conn.commit()
         
-        print(f"✅ Successfully cleared {count} jobs from the database!")
+        print(f"Successfully cleared {count} jobs from the database!")
         print("The pipeline will now analyze all jobs again as if they were brand new.")
         
     except sqlite3.OperationalError as e:

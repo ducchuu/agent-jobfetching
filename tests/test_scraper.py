@@ -4,7 +4,7 @@ import pandas as pd
 from app.services.scraper import fetch_daily_jobs
 from app.models.schemas import JobPosting
 
-# Mock dataframe that jobspy's scrape_jobs would return
+# Mock dataframe matching the jobspy API
 mock_df = pd.DataFrame({
     'id': ['12345'],
     'title': ['Junior AI Engineer'],
@@ -15,13 +15,12 @@ mock_df = pd.DataFrame({
 
 @patch('app.services.scraper.scrape_jobs')
 def test_fetch_daily_jobs(mock_scrape_jobs):
-    # Set the mock to return our test dataframe
+    # Set the mock to return and match our test dataframe
     mock_scrape_jobs.return_value = mock_df
     
     target_titles = ["Junior AI Engineer"]
     jobs = fetch_daily_jobs(target_job_titles=target_titles, location="Amsterdam")
     
-    # Assertions
     mock_scrape_jobs.assert_called_once()
     assert len(jobs) == 1
     assert isinstance(jobs[0], JobPosting)
@@ -30,7 +29,6 @@ def test_fetch_daily_jobs(mock_scrape_jobs):
 
 @patch('app.services.scraper.scrape_jobs')
 def test_fetch_daily_jobs_skips_empty_description(mock_scrape_jobs):
-    # Mock a dataframe where the description is None/empty
     empty_desc_df = pd.DataFrame({
         'id': ['12345'],
         'title': ['Junior AI Engineer'],
@@ -43,5 +41,5 @@ def test_fetch_daily_jobs_skips_empty_description(mock_scrape_jobs):
     
     jobs = fetch_daily_jobs(target_job_titles=["AI Engineer"])
     
-    # Should skip the job because it has no description
+    # should skip the job because it has no description
     assert len(jobs) == 0

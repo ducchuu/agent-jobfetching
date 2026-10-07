@@ -17,12 +17,12 @@ class ExperienceFilterResult(BaseModel):
     reason: str = Field(..., description="Explanation for the decision.")
 
 class MatchResult(BaseModel):
-    chain_of_thought: str = Field(..., description="Step-by-step reasoning evaluating language, experience, and skills")
+    chain_of_thought: str = Field(..., description="Step-by-step reasoning evaluating technical skills and projects.")
     score: int = Field(..., description="Match score from 0 to 100")
     reasoning: str = Field(..., description="1-2 sentences on why this fits.")
     missing_skills: List[str] = Field(..., description="Critical skills in the JD the candidate lacks.")
     upskill_action: str = Field(..., description="One concrete action to bridge the gap.")
-    auto_reject: bool = Field(..., description="True if the job demands Senior/Lead experience or >2 years of corporate experience.")
+    auto_reject: bool = Field(..., description="True if the skills/tech stack are a complete mismatch.")
 
 class Project(BaseModel):
     name: str = Field(..., description="Name of the project")

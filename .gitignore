@@ -42,3 +42,6 @@ data/*.sqlite3
 .DS_STORE
 
 REPO_STRUCTURE.md
+
+data/*.json
+data/*.pdf

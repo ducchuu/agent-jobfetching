@@ -26,7 +26,7 @@ async def evaluate_language(candidate_profile: CandidateProfile, job: JobPosting
     try:
         detected_code = detect(job.description[:1500])
         
-        # Ii it's a known language, check if the candidate speaks it
+        # if it's a known language, check if the candidate speaks it
         if detected_code in LANGUAGE_CODE_MAP and detected_code != 'en':
             detected_lang = LANGUAGE_CODE_MAP[detected_code]
             
@@ -59,12 +59,13 @@ async def evaluate_language(candidate_profile: CandidateProfile, job: JobPosting
     Description: {job.description}
 
     RULES:
-    1. If the job description explicitly requires fluency in a specific spoken language that is NOT listed in the candidate's languages, set 'is_rejected' to true.
-    2. Otherwise, set 'is_rejected' to false.
+    1. If the job description explicitly requires fluency in a specific spoken language that is NOT listed in the candidate's languages, set 'is_rejected' to true and provide a brief 1-sentence reason.
+    2. Otherwise, set 'is_rejected' to false and leave 'reason' as an empty string.
     """
     response = await router.acompletion(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}
+        response_format={"type": "json_object"},
+        max_tokens=100
     )
     return LanguageFilterResult.model_validate_json(response.choices[0].message.content)

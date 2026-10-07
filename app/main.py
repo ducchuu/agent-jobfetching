@@ -28,7 +28,7 @@ async def run_job_matching_pipeline():
 
     inferred_titles = candidate_profile.target_job_titles if candidate_profile.target_job_titles else ["AI Engineer", "Data Engineer"]
 
-    # You can define multiple locations you want to fetch jobs from, but they have to match jobspy API
+    # you can define multiple locations you want to fetch jobs from, but they have to match jobspy API
     locations = ["Netherlands"]
     
     jobs = []
@@ -70,7 +70,7 @@ async def run_job_matching_pipeline():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    # Scrape and evaluate jobs every morning at 7:00 AM
+    # scrape and evaluate jobs every morning at 7:00 am, this is automatic script, hence if the script is running (on server or locally), it will triger the pipeline (POST endpoint /trigger-pipeline) every morning at 7:00 am.
     scheduler.add_job(run_job_matching_pipeline, 'cron', hour=7, minute=0)
     scheduler.start()
     logger.info("Scheduler started. Pipeline will run daily at 07:00 AM.")

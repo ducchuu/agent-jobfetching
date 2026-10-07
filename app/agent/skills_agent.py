@@ -8,11 +8,11 @@ A human recruiter will review these recommendations before any action is taken.
 
 You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
 {{
-    "chain_of_thought": "<step-by-step reasoning evaluating skills and projects>",
+    "chain_of_thought": "<step-by-step reasoning evaluating skills and projects, max 2 sentences>",
     "score": <integer between 0 and 100>,
-    "reasoning": "<brief explanation of score>",
+    "reasoning": "<brief explanation of score, max 1 sentence>",
     "missing_skills": ["<missing skill>"],
-    "upskill_action": "<concrete weekend action>",
+    "upskill_action": "<concrete weekend action, max 1 sentence>",
     "recommend_archiving": false
 }}
 
@@ -36,7 +36,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
     }
     
     static_system_content = SYSTEM_PROMPT_TEMPLATE.format(
-        candidate_json=json.dumps(candidate_data, indent=2)
+        candidate_json=json.dumps(candidate_data, separators=(',', ':'))
     )
     
     dynamic_job_content = (
@@ -55,7 +55,8 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
                 {"role": "system", "content": static_system_content},
                 {"role": "user", "content": dynamic_job_content}
             ],
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            max_tokens=300
         )
         
         content = response.choices[0].message.content
