@@ -67,6 +67,10 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         ]
     )
 
+    import logging
+    logging.info(f"RAW ANTHROPIC RESPONSE: stop_reason={response.stop_reason}, usage={response.usage}")
+    logging.info(f"RAW ANTHROPIC BLOCKS: {response.content}")
+
     text_content = ""
     for block in response.content:
         if block.type == "text":
@@ -75,6 +79,8 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
 
     content = text_content.strip()
     
+    logging.info(f"EXTRACTED TEXT CONTENT: {repr(content)}")
+
     match = re.search(r"\{[\s\S]*\}", content)
     if match:
         content = match.group(0)
