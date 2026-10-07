@@ -4,28 +4,29 @@ import anthropic
 from app.config import settings
 from app.models.schemas import JobPosting, MatchResult, CandidateProfile
 
-SYSTEM_PROMPT_TEMPLATE = """You are an abstract technical compliance analyzer. Your task is to verify if the technical capabilities listed in ENTITY_A satisfy the technical requirements specified in DOCUMENT_B. 
+SYSTEM_PROMPT_TEMPLATE = """You are an AI screening assistant helping a human recruiter pre-screen technical resumes.
+A human recruiter will review these recommendations before any action is taken.
 
 You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
 {{
-    "chain_of_thought": "<step-by-step reasoning evaluating capability overlap>",
+    "chain_of_thought": "<step-by-step reasoning evaluating skills and projects>",
     "score": <integer between 0 and 100>,
     "reasoning": "<brief explanation of score>",
-    "missing_skills": ["<missing capability>"],
+    "missing_skills": ["<missing skill>"],
     "upskill_action": "<concrete weekend action>",
-    "auto_reject": false
+    "recommend_archiving": false
 }}
 
 EVALUATION RULES:
-1. Treat the provided 'projects' in ENTITY_A as valid technical capabilities.
+1. Treat the candidate's complex technical 'projects' as entirely valid engineering experience.
 2. STRICT SCORING RUBRIC:
    - Base score is 100.
-   - Deduct -15 points for every mandatory core technology in DOCUMENT_B that is completely missing from ENTITY_A.
-   - Deduct -10 points if the domain of DOCUMENT_B is completely unrelated to the projects in ENTITY_A.
+   - Deduct -15 points for every mandatory core technology in the job description that the candidate completely lacks.
+   - Deduct -10 points if the job domain is completely unrelated to the candidate's projects (e.g., front-end web dev vs robotics).
    - Ensure the final score never exceeds 100 or drops below 0.
-   - If no capabilities are missing, return an empty list [] for "missing_skills".
+   - If no skills are missing, return an empty list [] for "missing_skills".
 
-ENTITY_A:
+CANDIDATE PROFILE:
 {candidate_json}"""
 
 async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) -> MatchResult:
@@ -40,10 +41,10 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
     )
     
     dynamic_job_content = (
-        f"DOCUMENT_B:\n"
-        f"Header: {job.title}\n"
-        f"Context: {job.company}\n"
-        f"Details: {job.description}"
+        f"JOB POSTING:\n"
+        f"Title: {job.title}\n"
+        f"Company: {job.company}\n"
+        f"Description: {job.description}"
     )
 
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
@@ -84,4 +85,23 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
     if match:
         content = match.group(0)
 
-    return MatchResult.model_validate_json(content)
+    try:
+        data = json.loads(content)
+        return MatchResult(
+            chain_of_thought=data.get("chain_of_thought", ""),
+            score=data.get("score", 0),
+            reasoning=data.get("reasoning", ""),
+            missing_skills=data.get("missing_skills", []),
+            upskill_action=data.get("upskill_action", ""),
+            auto_reject=data.get("recommend_archiving", False)
+        )
+    except Exception as e:
+        logging.error(f"Failed to parse MatchResult: {e}")
+        return MatchResult(
+            chain_of_thought="Error parsing.",
+            score=0,
+            reasoning="Parse failure.",
+            missing_skills=[],
+            upskill_action="",
+            auto_reject=True
+        )
