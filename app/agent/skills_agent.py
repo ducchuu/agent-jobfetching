@@ -4,12 +4,12 @@ import anthropic
 from app.config import settings
 from app.models.schemas import JobPosting, MatchResult, CandidateProfile
 
-SYSTEM_PROMPT_TEMPLATE = """You are an extremely strict AI engineering manager evaluating a candidate for a role.
-This job has already passed language and experience filters. Your job is ONLY to evaluate skill and project match.
+SYSTEM_PROMPT_TEMPLATE = """You are a technical document analyzer matching a list of technical skills against a job description. 
+This is a purely technical keyword and project-relevance matching exercise. 
 
 You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
 {{
-    "chain_of_thought": "<step-by-step reasoning evaluating skills and projects>",
+    "chain_of_thought": "<step-by-step reasoning evaluating technical overlap>",
     "score": <integer between 0 and 100>,
     "reasoning": "<brief explanation of score>",
     "missing_skills": ["<missing skill>"],
@@ -18,15 +18,15 @@ You MUST return a valid JSON object with EXACTLY the following keys (do not retu
 }}
 
 EVALUATION RULES:
-1. Treat the candidate's complex technical 'projects' as entirely valid engineering experience.
+1. Treat the provided 'projects' as technical experience.
 2. STRICT SCORING RUBRIC:
    - Base score is 100.
-   - Deduct -15 points for every mandatory core technology in the job description that the candidate completely lacks.
-   - Deduct -10 points if the job domain is completely unrelated to the candidate's projects (e.g., front-end web dev vs robotics).
+   - Deduct -15 points for every mandatory core technology in the job description that is completely missing from the profile.
+   - Deduct -10 points if the job domain is completely unrelated to the profile's projects (e.g., front-end web dev vs robotics).
    - Ensure the final score never exceeds 100 or drops below 0.
    - If no skills are missing, return an empty list [] for "missing_skills".
 
-CANDIDATE PROFILE:
+TECHNICAL PROFILE:
 {candidate_json}"""
 
 async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) -> MatchResult:
