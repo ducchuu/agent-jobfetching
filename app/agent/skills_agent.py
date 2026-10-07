@@ -1,6 +1,7 @@
 import json
 import re
-from app.agent.llm_router import router
+import anthropic
+from app.config import settings
 from app.models.schemas import JobPosting, MatchResult, CandidateProfile
 
 SYSTEM_PROMPT_TEMPLATE = """You are an extremely strict AI engineering manager evaluating a candidate for a role.
@@ -46,21 +47,19 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         f"Description: {job.description}"
     )
 
-    response = await router.acompletion(
-        model="claude-5-5-sonnet",
-        max_tokens=2048,
-        thinking={"type": "between_tools"},
-        messages=[
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+    response = await client.messages.create(
+        model="claude-sonnet-5-5",
+        max_tokens=4096,
+        system=[
             {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": static_system_content,
-                        "cache_control": {"type": "ephemeral"}
-                    }
-                ]
-            },
+                "type": "text",
+                "text": static_system_content,
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
+        messages=[
             {
                 "role": "user",
                 "content": dynamic_job_content
@@ -68,10 +67,13 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         ]
     )
 
-    content = response.choices[0].message.content
-    if content is None:
-        content = ""
-    content = content.strip()
+    text_content = ""
+    for block in response.content:
+        if block.type == "text":
+            text_content = block.text
+            break
+
+    content = text_content.strip()
     
     match = re.search(r"\{[\s\S]*\}", content)
     if match:

@@ -13,3 +13,4 @@ pytest
 pytest-asyncio
 python-multipart
 langdetect
+anthropic
