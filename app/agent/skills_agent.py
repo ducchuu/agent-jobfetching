@@ -48,6 +48,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
 
     response = await router.acompletion(
         model="claude-5-5-sonnet",
+        max_tokens=2048,
         messages=[
             {
                 "role": "system",
