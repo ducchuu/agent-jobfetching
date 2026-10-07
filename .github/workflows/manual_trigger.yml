@@ -1,7 +1,6 @@
 name: Manual Pipeline Trigger
 
 on:
-  # Allows you to manually trigger it from the GitHub Actions tab
   workflow_dispatch: 
 
 jobs:

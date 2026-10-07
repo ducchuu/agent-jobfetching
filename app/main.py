@@ -38,6 +38,8 @@ async def run_job_matching_pipeline():
             location=loc,
             job_type="fulltime"
         ))
+        
+    logger.info(f"Scraper finished. Found {len(jobs)} total jobs to process.")
     
     sem = asyncio.Semaphore(5)
 

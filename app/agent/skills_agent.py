@@ -63,11 +63,19 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
             {
                 "role": "user",
                 "content": dynamic_job_content
+            },
+            {
+                "role": "assistant",
+                "content": "{"
             }
         ]
     )
 
-    content = response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if content is None:
+        content = ""
+    content = "{" + content.strip()
+    
     match = re.search(r"\{[\s\S]*\}", content)
     if match:
         content = match.group(0)

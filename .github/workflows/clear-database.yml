@@ -1,7 +1,7 @@
 name: Clear Database
 
 on:
-  workflow_dispatch: # allows to manually trigger this from the GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   clear-db:
@@ -9,5 +9,4 @@ jobs:
 
     steps:
       - name: Clear SQLite Database
-        # executes the script inside the running API container
         run: docker exec job_fetching_agent_api python clear_db.py
