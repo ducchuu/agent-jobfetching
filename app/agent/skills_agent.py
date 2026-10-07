@@ -47,45 +47,22 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         f"Description: {job.description}"
     )
 
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-    response = await client.messages.create(
-        model="claude-sonnet-5-5",
-        max_tokens=4096,
-        system=[
-            {
-                "type": "text",
-                "text": static_system_content,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
-        messages=[
-            {
-                "role": "user",
-                "content": dynamic_job_content
-            }
-        ]
-    )
-
-    import logging
-    logging.info(f"RAW ANTHROPIC RESPONSE: stop_reason={response.stop_reason}, usage={response.usage}")
-    logging.info(f"RAW ANTHROPIC BLOCKS: {response.content}")
-
-    text_content = ""
-    for block in response.content:
-        if block.type == "text":
-            text_content = block.text
-            break
-
-    content = text_content.strip()
-    
-    logging.info(f"EXTRACTED TEXT CONTENT: {repr(content)}")
-
-    match = re.search(r"\{[\s\S]*\}", content)
-    if match:
-        content = match.group(0)
-
     try:
+        from litellm import acompletion
+        
+        response = await acompletion(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": static_system_content},
+                {"role": "user", "content": dynamic_job_content}
+            ],
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        import logging
+        logging.info(f"LLM RAW CONTENT: {repr(content)}")
+        
         data = json.loads(content)
         return MatchResult(
             chain_of_thought=data.get("chain_of_thought", ""),
@@ -96,6 +73,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
             auto_reject=data.get("recommend_archiving", False)
         )
     except Exception as e:
+        import logging
         logging.error(f"Failed to parse MatchResult: {e}")
         return MatchResult(
             chain_of_thought="Error parsing.",
