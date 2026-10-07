@@ -48,9 +48,8 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
 
     response = await router.acompletion(
         model="claude-5-5-sonnet",
-        max_tokens=4096,
-        reasoning_effort="medium",
-        response_format={"type": "json_object"},
+        max_tokens=2048,
+        thinking={"type": "between_tools"},
         messages=[
             {
                 "role": "system",
