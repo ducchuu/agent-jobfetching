@@ -29,5 +29,5 @@ jobs:
           docker-compose down
           docker-compose up -d --build
 
-      - name: Clean up old Docker images (optional but recommended)
+      - name: Clean up old Docker images
         run: docker image prune -f

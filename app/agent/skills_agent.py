@@ -1,6 +1,5 @@
 import json
 import re
-import anthropic
 from app.config import settings
 from app.models.schemas import JobPosting, MatchResult, CandidateProfile
 
@@ -62,6 +61,10 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         content = response.choices[0].message.content
         import logging
         logging.info(f"LLM RAW CONTENT: {repr(content)}")
+        
+        match = re.search(r"\{[\s\S]*\}", content)
+        if match:
+            content = match.group(0)
         
         data = json.loads(content)
         return MatchResult(
