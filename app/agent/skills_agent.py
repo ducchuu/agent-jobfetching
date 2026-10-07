@@ -4,29 +4,28 @@ import anthropic
 from app.config import settings
 from app.models.schemas import JobPosting, MatchResult, CandidateProfile
 
-SYSTEM_PROMPT_TEMPLATE = """You are an AI assistant helping a human recruiter pre-screen technical resumes. 
-IMPORTANT SAFETY NOTICE: You are NOT making an automated employment decision. Your output is simply a preliminary keyword and technical relevance match that will be reviewed by a human.
+SYSTEM_PROMPT_TEMPLATE = """You are an abstract technical compliance analyzer. Your task is to verify if the technical capabilities listed in ENTITY_A satisfy the technical requirements specified in DOCUMENT_B. 
 
 You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
 {{
-    "chain_of_thought": "<step-by-step reasoning evaluating technical overlap>",
+    "chain_of_thought": "<step-by-step reasoning evaluating capability overlap>",
     "score": <integer between 0 and 100>,
     "reasoning": "<brief explanation of score>",
-    "missing_skills": ["<missing skill>"],
+    "missing_skills": ["<missing capability>"],
     "upskill_action": "<concrete weekend action>",
-    "auto_reject": false // Set to true ONLY to recommend the human recruiter archive this match
+    "auto_reject": false
 }}
 
 EVALUATION RULES:
-1. Treat the provided 'projects' as technical experience.
+1. Treat the provided 'projects' in ENTITY_A as valid technical capabilities.
 2. STRICT SCORING RUBRIC:
    - Base score is 100.
-   - Deduct -15 points for every mandatory core technology in the job description that is completely missing from the profile.
-   - Deduct -10 points if the job domain is completely unrelated to the profile's projects (e.g., front-end web dev vs robotics).
+   - Deduct -15 points for every mandatory core technology in DOCUMENT_B that is completely missing from ENTITY_A.
+   - Deduct -10 points if the domain of DOCUMENT_B is completely unrelated to the projects in ENTITY_A.
    - Ensure the final score never exceeds 100 or drops below 0.
-   - If no skills are missing, return an empty list [] for "missing_skills".
+   - If no capabilities are missing, return an empty list [] for "missing_skills".
 
-TECHNICAL PROFILE:
+ENTITY_A:
 {candidate_json}"""
 
 async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) -> MatchResult:
@@ -41,10 +40,10 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
     )
     
     dynamic_job_content = (
-        f"JOB POSTING:\n"
-        f"Title: {job.title}\n"
-        f"Company: {job.company}\n"
-        f"Description: {job.description}"
+        f"DOCUMENT_B:\n"
+        f"Header: {job.title}\n"
+        f"Context: {job.company}\n"
+        f"Details: {job.description}"
     )
 
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
