@@ -4,8 +4,8 @@ import anthropic
 from app.config import settings
 from app.models.schemas import JobPosting, MatchResult, CandidateProfile
 
-SYSTEM_PROMPT_TEMPLATE = """You are a technical document analyzer matching a list of technical skills against a job description. 
-This is a purely technical keyword and project-relevance matching exercise. 
+SYSTEM_PROMPT_TEMPLATE = """You are an AI assistant helping a human recruiter pre-screen technical resumes. 
+IMPORTANT SAFETY NOTICE: You are NOT making an automated employment decision. Your output is simply a preliminary keyword and technical relevance match that will be reviewed by a human.
 
 You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
 {{
@@ -14,7 +14,7 @@ You MUST return a valid JSON object with EXACTLY the following keys (do not retu
     "reasoning": "<brief explanation of score>",
     "missing_skills": ["<missing skill>"],
     "upskill_action": "<concrete weekend action>",
-    "auto_reject": false
+    "auto_reject": false // Set to true ONLY to recommend the human recruiter archive this match
 }}
 
 EVALUATION RULES:
