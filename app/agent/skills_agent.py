@@ -48,7 +48,9 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
 
     response = await router.acompletion(
         model="claude-5-5-sonnet",
-        max_tokens=2048,
+        max_tokens=4096,
+        reasoning_effort="medium",
+        response_format={"type": "json_object"},
         messages=[
             {
                 "role": "system",
@@ -63,10 +65,6 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
             {
                 "role": "user",
                 "content": dynamic_job_content
-            },
-            {
-                "role": "assistant",
-                "content": "{"
             }
         ]
     )
@@ -74,7 +72,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
     content = response.choices[0].message.content
     if content is None:
         content = ""
-    content = "{" + content.strip()
+    content = content.strip()
     
     match = re.search(r"\{[\s\S]*\}", content)
     if match:
