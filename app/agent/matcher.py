@@ -59,7 +59,7 @@ Candidate Summary: {state["candidate_profile"].experience_summary}
 Strategy (1 sentence):"""
     try:
         response = await router.acompletion(
-            model="gpt-4o-mini",
+            model="gpt-6-luna",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=50
         )
@@ -93,7 +93,7 @@ If it genuinely looks like a perfect match with no obvious flaws, return: {{"fou
 """
     try:
         response = await router.acompletion(
-            model="gpt-4o-mini",
+            model="gpt-6-luna",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             max_tokens=100

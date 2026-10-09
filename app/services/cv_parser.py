@@ -48,7 +48,7 @@ async def extract_profile_from_pdf(pdf_path: str) -> CandidateProfile:
     
     logger.info("Calling LLM to extract structured profile...")
     response = await router.acompletion(
-        model="claude-sonnet-5-5",
+        model="claude-5-5-sonnet",
         messages=[{"role": "user", "content": prompt}]
     )
     

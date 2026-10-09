@@ -63,7 +63,7 @@ async def evaluate_language(candidate_profile: CandidateProfile, job: JobPosting
     2. Otherwise, set 'is_rejected' to false and leave 'reason' as an empty string.
     """
     response = await router.acompletion(
-        model="gpt-4o-mini",
+        model="gpt-6-luna",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
         max_tokens=100

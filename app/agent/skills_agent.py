@@ -53,7 +53,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting, 
         from litellm import acompletion
         
         response = await acompletion(
-            model="gpt-4o",
+            model="gpt-6.1-sol",
             messages=[
                 {"role": "system", "content": static_system_content},
                 {"role": "user", "content": dynamic_job_content}
