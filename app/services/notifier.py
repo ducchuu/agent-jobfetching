@@ -3,7 +3,7 @@ from app.config import settings
 from app.models.schemas import JobPosting, MatchResult
 
 async def send_discord_alert(job: JobPosting, match: MatchResult):
-    color = 0x00FF00 if match.score >= 90 else 0xFFA500 # Green for >= 95, Orange for 91-94
+    color = 0x00FF00 if match.score >= 90 else 0xFFA500 # green for >= 90, orange for <80,90)
 
     payload = {
         "username": "Job Fetching Agent",

@@ -23,6 +23,7 @@ class MatchResult(BaseModel):
     missing_skills: List[str] = Field(..., description="Critical skills in the JD the candidate lacks.")
     upskill_action: str = Field(..., description="One concrete action to bridge the gap.")
     auto_reject: bool = Field(..., description="True if the skills/tech stack are a complete mismatch.")
+    is_skills_evaluated: bool = Field(False, description="Internal flag to track if the skills agent processed this job")
 
 class Project(BaseModel):
     name: str = Field(..., description="Name of the project")

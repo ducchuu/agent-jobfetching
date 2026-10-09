@@ -21,16 +21,16 @@ async def extract_profile_from_pdf(pdf_path: str) -> CandidateProfile:
         raise
         
     prompt = f"""
-    You are an expert technical recruiter analyzing a junior engineer's CV.
-    Your goal is to extract a structured profile.
+    You are a data extraction pipeline tool. Your task is to extract structured JSON data from a provided text document representing a professional portfolio.
 
-    CRITICAL INSTRUCTIONS:
-    1. Extract all technical projects (academic, thesis, personal) into the 'projects' array. From the 'projects' array extract relevant skills and add them to skills array, if not present yet.
-    2. Generate 3 to 5 highly specific 'target_job_titles' based on the intersection of their skills. Do NOT use prefixes like 'Junior', 'Entry-level', or 'Graduate'. Just output the core role (e.g., 'AI Engineer', 'Robotics Software Engineer', 'Embedded Systems Engineer'). The pipeline will filter for experience later.
-    3. The 'experience_summary' should summarize all work experience (including technical internships or roles alongside non-technical work).
-    4. Extract all languages spoken by the candidate (e.g. English, Polish) into the 'languages' array as bare language names without proficiency levels.
+    DATA MAPPING RULES:
+    1. projects: Extract all technical projects (academic, personal, thesis).
+    2. skills: Extract all technical skills mentioned, including those inferred from the 'projects' array.
+    3. target_job_titles: Generate 3-5 specific technical roles matching the skills (e.g., 'AI Engineer', 'Embedded Systems Engineer'). Omit seniority prefixes like 'Junior'.
+    4. experience_summary: Briefly summarize all professional experience and internships.
+    5. languages: Extract spoken languages as a simple list of names (e.g., ["English", "Polish"]).
     
-    You MUST return a valid JSON object with EXACTLY the following keys (do not return the schema itself, return the populated data):
+    Output ONLY a raw, valid JSON object with the exact keys below. Do not include markdown formatting or commentary.
     {{
         "name": "extracted name",
         "skills": ["skill 1", "skill 2"],
@@ -42,18 +42,22 @@ async def extract_profile_from_pdf(pdf_path: str) -> CandidateProfile:
         "target_job_titles": ["title 1", "title 2", "title 3"]
     }}
 
-    CANDIDATE CV TEXT:
+    DOCUMENT TEXT:
     {text}
     """
     
     logger.info("Calling LLM to extract structured profile...")
     response = await router.acompletion(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}
+        model="claude-sonnet-5-5",
+        messages=[{"role": "user", "content": prompt}]
     )
     
-    raw_json = response.choices[0].message.content
+    raw_json = response.choices[0].message.content.strip()
+    import re
+    match = re.search(r"\{[\s\S]*\}", raw_json)
+    if match:
+        raw_json = match.group(0)
+        
     profile = CandidateProfile.model_validate_json(raw_json)
     
     os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)

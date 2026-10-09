@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 def fetch_daily_jobs(
     target_job_titles: list[str], 
     location: str = "Netherlands",
-    job_type: str = "fulltime" # Can be "fulltime", "internship", "parttime"
+    job_type: str = "fulltime", # here can be "fulltime", "internship", "parttime"
+    results_wanted: int = 200
 ) -> list[JobPosting]:
     
     logger.info(f"Scraping jobs for dynamic titles: {target_job_titles}")
@@ -20,10 +21,10 @@ def fetch_daily_jobs(
         site_name=["linkedin", "indeed"],
         search_term=search_query,
         location=location,
-        results_wanted=50,
-        hours_old=72, # Only jobs posted in the last 3 days
+        results_wanted=results_wanted,
+        hours_old=72, # only jobs posted in the last 3 days
         country_indeed='Netherlands',
-        linkedin_fetch_description=True # Forces LinkedIn to fetch descriptions to avoid nan
+        linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
     )
     
     import pandas as pd
@@ -40,8 +41,7 @@ def fetch_daily_jobs(
             
         raw_desc = str(row['description'])
         
-        # 1. Job Description Boilerplate Stripping
-        # Truncate anything after common HR/legal boilerplate headers to save tokens
+        # 1st token optimization technique of stripping all unneccessary content from the fetched jobs, that doesn't really match the skills agent purpose
         boilerplate_patterns = [
             r"(?i)\b(about the company)\b",
             r"(?i)\b(benefits & perks)\b",
@@ -56,11 +56,10 @@ def fetch_daily_jobs(
         for pattern in boilerplate_patterns:
             match = re.search(pattern, cleaned_desc)
             if match:
-                # Truncate at the first occurrence of any boilerplate header
                 cleaned_desc = cleaned_desc[:match.start()].strip()
                 break
                 
-        # Fallback length truncation just in case
+        # fallback in case it fails, takes back all 8000 tokens
         cleaned_desc = cleaned_desc[:8000]
 
         job_postings.append(JobPosting(

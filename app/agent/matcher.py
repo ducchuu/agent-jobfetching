@@ -9,7 +9,7 @@ async def evaluate_job(
     target_yoe: int = 0
 ) -> MatchResult:
     
-    # Language Filter agent
+    # Language agent
     lang_result = await evaluate_language(candidate_profile, job)
     if lang_result.is_rejected:
         return MatchResult(
@@ -21,7 +21,7 @@ async def evaluate_job(
             auto_reject=True
         )
         
-    # Experience Filter agent
+    # Experience agent
     exp_result = await evaluate_experience(job, target_yoe)
     if exp_result.is_rejected:
         return MatchResult(
@@ -33,5 +33,7 @@ async def evaluate_job(
             auto_reject=True
         )
         
-    # Score Match agent
-    return await evaluate_skills(candidate_profile, job)
+    # Skills agent
+    result = await evaluate_skills(candidate_profile, job)
+    result.is_skills_evaluated = True
+    return result

@@ -36,36 +36,49 @@ async def run_job_matching_pipeline():
         jobs.extend(fetch_daily_jobs(
             target_job_titles=inferred_titles,
             location=loc,
-            job_type="fulltime"
+            job_type="fulltime",
+            results_wanted=300
         ))
         
     logger.info(f"Scraper finished. Found {len(jobs)} total jobs to process.")
     
-    sem = asyncio.Semaphore(5)
-
+    target_skills_evaluations = 25 # this is a target of daily job analyzed by skills agent, after filtering of experience agent and language agent
+    skills_evaluated_count = 0
+    
     async def process_job(job):
         if is_job_processed(job.id):
             logger.info(f"Skipping already processed job: {job.id}")
-            return
+            return False
             
-        async with sem:
-            logger.info(f"Evaluating job: {job.title} at {job.company}")
-            try:
-                match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
-                
-                if getattr(match_result, 'auto_reject', False):
-                    logger.info(f"Auto-rejected senior/heavy YoE role: {job.title}")
-                    mark_job_processed(job.id)
-                    return
-                    
-                if match_result.score >= settings.MATCH_THRESHOLD:
-                    logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
-                    await send_discord_alert(job, match_result)
+        logger.info(f"Evaluating job: {job.title} at {job.company}")
+        try:
+            match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
+            
+            if getattr(match_result, 'auto_reject', False):
+                logger.info(f"Auto-rejected role: {job.title}")
                 mark_job_processed(job.id)
-            except Exception as e:
-                logger.error(f"Error evaluating job {job.id}: {e}")
+                return match_result.is_skills_evaluated
+                
+            if match_result.score >= settings.MATCH_THRESHOLD:
+                logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
+                await send_discord_alert(job, match_result)
+            mark_job_processed(job.id)
+            return match_result.is_skills_evaluated
+        except Exception as e:
+            logger.error(f"Error evaluating job {job.id}: {e}")
+            return False
 
-    await asyncio.gather(*(process_job(job) for job in jobs))
+    batch_size = 5
+    for i in range(0, len(jobs), batch_size):
+        if skills_evaluated_count >= target_skills_evaluations:
+            logger.info(f"Reached target of {target_skills_evaluations} skills evaluations for today. Stopping.")
+            break
+            
+        batch = jobs[i:i+batch_size]
+        results = await asyncio.gather(*(process_job(job) for job in batch))
+        
+        skills_evaluated_count += sum(bool(res) for res in results)
+        logger.info(f"Progress: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
