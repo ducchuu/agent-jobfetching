@@ -9,10 +9,11 @@ def fetch_daily_jobs(
     target_job_titles: list[str], 
     location: str = "Netherlands",
     job_type: str = "fulltime", # here can be "fulltime", "internship", "parttime"
-    results_wanted: int = 200
+    results_wanted: int = 200,
+    offset: int = 0
 ) -> list[JobPosting]:
     
-    logger.info(f"Scraping jobs for dynamic titles: {target_job_titles}")
+    logger.info(f"Scraping jobs for dynamic titles: {target_job_titles} (offset: {offset})")
     
     search_query = " OR ".join([f'"{title}"' for title in target_job_titles])
     
@@ -22,6 +23,7 @@ def fetch_daily_jobs(
         search_term=search_query,
         location=location,
         results_wanted=results_wanted,
+        offset=offset,
         hours_old=72, # only jobs posted in the last 3 days
         country_indeed='Netherlands',
         linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan

@@ -28,20 +28,6 @@ async def run_job_matching_pipeline():
 
     inferred_titles = candidate_profile.target_job_titles if candidate_profile.target_job_titles else ["AI Engineer", "Data Engineer"]
 
-    # you can define multiple locations you want to fetch jobs from, but they have to match jobspy API
-    locations = ["Netherlands"]
-    
-    jobs = []
-    for loc in locations:
-        jobs.extend(fetch_daily_jobs(
-            target_job_titles=inferred_titles,
-            location=loc,
-            job_type="fulltime",
-            results_wanted=300
-        ))
-        
-    logger.info(f"Scraper finished. Found {len(jobs)} total jobs to process.")
-    
     target_skills_evaluations = 25 # this is a target of daily job analyzed by skills agent, after filtering of experience agent and language agent
     skills_evaluated_count = 0
     
@@ -68,17 +54,43 @@ async def run_job_matching_pipeline():
             logger.error(f"Error evaluating job {job.id}: {e}")
             return False
 
-    batch_size = 5
-    for i in range(0, len(jobs), batch_size):
+    # you can define multiple locations you want to fetch jobs from, but they have to match jobspy API
+    locations = ["Netherlands"]
+    for loc in locations:
         if skills_evaluated_count >= target_skills_evaluations:
-            logger.info(f"Reached target of {target_skills_evaluations} skills evaluations for today. Stopping.")
             break
             
-        batch = jobs[i:i+batch_size]
-        results = await asyncio.gather(*(process_job(job) for job in batch))
+        offset = 0
+        scrape_batch_size = 100
         
-        skills_evaluated_count += sum(bool(res) for res in results)
-        logger.info(f"Progress: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated.")
+        while skills_evaluated_count < target_skills_evaluations:
+            logger.info(f"Fetching {scrape_batch_size} jobs for {loc} (offset: {offset})...")
+            jobs = fetch_daily_jobs(
+                target_job_titles=inferred_titles,
+                location=loc,
+                job_type="fulltime",
+                results_wanted=scrape_batch_size,
+                offset=offset
+            )
+            
+            if not jobs:
+                logger.info(f"No more jobs found for location {loc} at offset {offset}.")
+                break
+                
+            offset += scrape_batch_size
+            logger.info(f"Scraper finished batch. Found {len(jobs)} jobs to process.")
+            
+            eval_batch_size = 5
+            for i in range(0, len(jobs), eval_batch_size):
+                if skills_evaluated_count >= target_skills_evaluations:
+                    logger.info(f"Reached target of {target_skills_evaluations} skills evaluations for today. Stopping.")
+                    break
+                    
+                batch = jobs[i:i+eval_batch_size]
+                results = await asyncio.gather(*(process_job(job) for job in batch))
+                
+                skills_evaluated_count += sum(bool(res) for res in results)
+                logger.info(f"Progress: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

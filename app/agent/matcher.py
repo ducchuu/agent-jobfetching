@@ -50,7 +50,7 @@ async def parallel_agents_node(state: JobState):
 
 async def strategy_node(state: JobState):
     prompt = f"""You are a recruiter strategist. Read the Job Description and the Candidate's profile summary.
-Generate a single-sentence evaluation strategy for the Skills Matcher agent. Tell it what exactly to focus on when comparing this candidate to this specific job.
+Generate a single-sentence evaluation strategy for the skills agent agent. Tell it what exactly to focus on when comparing this candidate to this specific job.
 
 Job Title: {state["job"].title}
 Job Desc: {state["job"].description[:1500]}
@@ -69,7 +69,7 @@ Strategy (1 sentence):"""
         logger.warning(f"Strategy generation failed: {e}")
         return {"strategy": ""}
 
-async def skills_matcher_node(state: JobState):
+async def skills_agent_node(state: JobState):
     res = await evaluate_skills(state["candidate_profile"], state["job"], state.get("strategy"))
     res.is_skills_evaluated = True
     return {"final_match_result": res}
@@ -117,30 +117,30 @@ workflow = StateGraph(JobState)
 workflow.add_node("scraper_validation", scraper_validation_node)
 workflow.add_node("parallel_agents", parallel_agents_node)
 workflow.add_node("strategy", strategy_node)
-workflow.add_node("skills_matcher", skills_matcher_node)
+workflow.add_node("skills_agent", skills_agent_node)
 workflow.add_node("devils_advocate", devils_advocate_node)
 
 workflow.set_entry_point("scraper_validation")
 
-# scraper -> parallel_agents
+# scraper -> parallel agents
 workflow.add_conditional_edges(
     "scraper_validation",
     check_rejection,
     {"end": END, "next": "parallel_agents"}
 )
 
-# parallel_agents -> strategy
+# parallel agents -> strategy
 workflow.add_conditional_edges(
     "parallel_agents",
     check_rejection,
     {"end": END, "next": "strategy"}
 )
 
-# strategy -> skills matcher
-workflow.add_edge("strategy", "skills_matcher")
+# strategy -> skills agent
+workflow.add_edge("strategy", "skills_agent")
 
-# skills matcher -> devils advocate
-workflow.add_edge("skills_matcher", "devils_advocate")
+# skills agent -> devils advocate
+workflow.add_edge("skills_agent", "devils_advocate")
 
 # devils advocate -> END
 workflow.add_edge("devils_advocate", END)
