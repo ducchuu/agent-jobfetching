@@ -28,7 +28,7 @@ EVALUATION RULES:
 CANDIDATE PROFILE:
 {candidate_json}"""
 
-async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) -> MatchResult:
+async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting, strategy: str = None) -> MatchResult:
     candidate_data = {
         "skills": candidate_profile.skills,
         "projects": [p.model_dump() for p in candidate_profile.projects],
@@ -43,8 +43,11 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         f"JOB POSTING:\n"
         f"Title: {job.title}\n"
         f"Company: {job.company}\n"
-        f"Description: {job.description}"
+        f"Description: {job.description}\n"
     )
+    if strategy:
+        dynamic_job_content += f"\nEVALUATION STRATEGY: {strategy}\nPlease focus on this strategy while evaluating."
+
 
     try:
         from litellm import acompletion

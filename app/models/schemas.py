@@ -36,6 +36,7 @@ class CandidateProfile(BaseModel):
     languages: List[str] = Field(..., description="Languages spoken by the candidate")
     projects: List[Project] = Field(..., description="List of academic and personal technical projects")
     experience_summary: str = Field(..., description="A short summary of their work experience")
+    academic_level: str = Field(default="BSc", description="The highest academic degree obtained by the candidate (e.g., BSc, MSc, PhD).")
     target_job_titles: List[str] = Field(
         ..., 
         description="List of 3 to 5 highly specific job titles that perfectly match this candidate's unique blend of skills and projects."

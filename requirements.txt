@@ -14,3 +14,5 @@ pytest-asyncio
 python-multipart
 langdetect
 anthropic
+langgraph
+langchain-core
