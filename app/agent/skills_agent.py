@@ -28,6 +28,10 @@ EVALUATION RULES:
 CANDIDATE PROFILE:
 {candidate_json}"""
 
+from app.agent.llm_router import router
+
+acompletion = router.acompletion
+
 async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting, strategy: str = None) -> MatchResult:
     candidate_data = {
         "skills": candidate_profile.skills,
@@ -48,10 +52,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting, 
     if strategy:
         dynamic_job_content += f"\nEVALUATION STRATEGY: {strategy}\nPlease focus on this strategy while evaluating."
 
-
     try:
-        from litellm import acompletion
-        
         response = await acompletion(
             model="gpt-6.1-sol",
             messages=[
@@ -59,13 +60,17 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting, 
                 {"role": "user", "content": dynamic_job_content}
             ],
             response_format={"type": "json_object"},
-            max_tokens=300
+            reasoning_effort="low",
+            max_tokens=4096
         )
         
-        content = response.choices[0].message.content
+        content = (response.choices[0].message.content or "").strip()
         import logging
         logging.info(f"LLM RAW CONTENT: {repr(content)}")
         
+        if not content:
+            raise ValueError("LLM returned empty content (token budget may have been exhausted).")
+
         match = re.search(r"\{[\s\S]*\}", content)
         if match:
             content = match.group(0)

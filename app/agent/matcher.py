@@ -61,9 +61,10 @@ Strategy (1 sentence):"""
         response = await router.acompletion(
             model="gpt-6-luna",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=50
+            reasoning_effort="none",
+            max_tokens=500
         )
-        strategy = response.choices[0].message.content.strip()
+        strategy = (response.choices[0].message.content or "").strip()
         return {"strategy": strategy}
     except Exception as e:
         logger.warning(f"Strategy generation failed: {e}")
@@ -92,13 +93,19 @@ If you find a critical flaw, return a JSON object: {{"found_flaw": true, "reason
 If it genuinely looks like a perfect match with no obvious flaws, return: {{"found_flaw": false, "reason": ""}}
 """
     try:
+        import re
         response = await router.acompletion(
             model="gpt-6-luna",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            max_tokens=100
+            reasoning_effort="none",
+            max_tokens=1024
         )
-        data = json.loads(response.choices[0].message.content)
+        content = (response.choices[0].message.content or "").strip()
+        match = re.search(r"\{[\s\S]*\}", content)
+        if match:
+            content = match.group(0)
+        data = json.loads(content)
         if data.get("found_flaw"):
             match_result.score = max(0, match_result.score - 15) # penalize additionally so that it goes below the threshold
             match_result.reasoning = f"{match_result.reasoning} | [Devil's Advocate Penalty]: {data.get('reason')}"

@@ -1,6 +1,9 @@
 import re
+import logging
 from app.agent.llm_router import router
 from app.models.schemas import JobPosting, ExperienceFilterResult
+
+logger = logging.getLogger(__name__)
 
 SENIOR_TITLE_PATTERN = re.compile(
     r"\b(senior|sr\.?|lead|principal|staff|head of|director|vp|manager)\b",
@@ -37,13 +40,22 @@ For any 'is_rejected' = false, leave 'reason' as an empty string."""
 
     user_prompt = f"Title: {job.title}\nCompany: {job.company}\nDescription: {job.description}"
 
-    response = await router.acompletion(
-        model="gpt-6-luna",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        response_format={"type": "json_object"},
-        max_tokens=100
-    )
-    return ExperienceFilterResult.model_validate_json(response.choices[0].message.content)
+    try:
+        response = await router.acompletion(
+            model="gpt-6-luna",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            reasoning_effort="none",
+            max_tokens=1024
+        )
+        content = (response.choices[0].message.content or "").strip()
+        match = re.search(r"\{[\s\S]*\}", content)
+        if match:
+            content = match.group(0)
+        return ExperienceFilterResult.model_validate_json(content)
+    except Exception as e:
+        logger.warning(f"Experience filter failed for job {job.id}: {e}. Defaulting to not rejected.")
+        return ExperienceFilterResult(is_rejected=False, reason="")

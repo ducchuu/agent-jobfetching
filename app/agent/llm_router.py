@@ -2,6 +2,7 @@ from litellm import Router
 from app.config import settings
 import litellm
 
+litellm.drop_params = True
 litellm.success_callback = ["langfuse"]
 litellm.failure_callback = ["langfuse"]
 
@@ -40,6 +41,6 @@ router = Router(
     model_list=model_list,
     fallbacks=[
         {"gpt-6-luna": ["claude-4-5-haiku"]},
-        {"gpt-4o": ["claude-5-5-sonnet"]}
+        {"gpt-6.1-sol": ["claude-5-5-sonnet"]}
     ]
 )

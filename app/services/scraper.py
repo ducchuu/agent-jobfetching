@@ -17,17 +17,21 @@ def fetch_daily_jobs(
     
     search_query = " OR ".join([f'"{title}"' for title in target_job_titles])
     
-    # scrape across only LinkedIn and Indeed, because JobSpy API doesn't support magnet.me 
-    jobs_df = scrape_jobs(
-        site_name=["linkedin", "indeed"],
-        search_term=search_query,
-        location=location,
-        results_wanted=results_wanted,
-        offset=offset,
-        hours_old=72, # only jobs posted in the last 3 days
-        country_indeed='Netherlands',
-        linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
-    )
+    try:
+        # scrape across only LinkedIn and Indeed, because JobSpy API doesn't support magnet.me 
+        jobs_df = scrape_jobs(
+            site_name=["linkedin", "indeed"],
+            search_term=search_query,
+            location=location,
+            results_wanted=results_wanted,
+            offset=offset,
+            hours_old=72, # only jobs posted in the last 3 days
+            country_indeed='Netherlands',
+            linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
+        )
+    except Exception as e:
+        logger.error(f"Scraper error during scrape_jobs (offset {offset}): {e}")
+        return []
     
     import pandas as pd
     

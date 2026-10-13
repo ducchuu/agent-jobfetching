@@ -62,10 +62,20 @@ async def evaluate_language(candidate_profile: CandidateProfile, job: JobPosting
     1. If the job description explicitly requires fluency in a specific spoken language that is NOT listed in the candidate's languages, set 'is_rejected' to true and provide a brief 1-sentence reason.
     2. Otherwise, set 'is_rejected' to false and leave 'reason' as an empty string.
     """
-    response = await router.acompletion(
-        model="gpt-6-luna",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        max_tokens=100
-    )
-    return LanguageFilterResult.model_validate_json(response.choices[0].message.content)
+    try:
+        import re
+        response = await router.acompletion(
+            model="gpt-6-luna",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            reasoning_effort="none",
+            max_tokens=1024
+        )
+        content = (response.choices[0].message.content or "").strip()
+        match = re.search(r"\{[\s\S]*\}", content)
+        if match:
+            content = match.group(0)
+        return LanguageFilterResult.model_validate_json(content)
+    except Exception as e:
+        logger.warning(f"Language filter failed for job {job.id}: {e}. Defaulting to not rejected.")
+        return LanguageFilterResult(is_rejected=False, reason="")

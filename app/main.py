@@ -52,6 +52,7 @@ async def run_job_matching_pipeline():
             return match_result.is_skills_evaluated
         except Exception as e:
             logger.error(f"Error evaluating job {job.id}: {e}")
+            mark_job_processed(job.id)
             return False
 
     # you can define multiple locations you want to fetch jobs from, but they have to match jobspy API
@@ -91,6 +92,10 @@ async def run_job_matching_pipeline():
                 
                 skills_evaluated_count += sum(bool(res) for res in results)
                 logger.info(f"Progress: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated.")
+
+            if skills_evaluated_count < target_skills_evaluations:
+                logger.info("Pausing 15 seconds before fetching next scraper batch to prevent rate limiting (LinkedIn 429)...")
+                await asyncio.sleep(15)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
