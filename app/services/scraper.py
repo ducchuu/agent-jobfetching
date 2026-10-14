@@ -25,7 +25,7 @@ def fetch_daily_jobs(
             location=location,
             results_wanted=results_wanted,
             offset=offset,
-            hours_old=72, # only jobs posted in the last 3 days
+            hours_old=168, # only jobs posted in the last 3 days
             country_indeed='Netherlands',
             linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
         )
