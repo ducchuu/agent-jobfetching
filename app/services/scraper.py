@@ -9,7 +9,7 @@ def fetch_daily_jobs(
     target_job_titles: list[str], 
     location: str = "Netherlands",
     job_type: str = "fulltime", # here can be "fulltime", "internship", "parttime"
-    results_wanted: int = 200,
+    results_wanted: int = 25,
     offset: int = 0
 ) -> list[JobPosting]:
     
@@ -35,9 +35,12 @@ def fetch_daily_jobs(
     
     import pandas as pd
     
+    if jobs_df is None or jobs_df.empty:
+        logger.info(f"JobSpy returned 0 raw jobs for query at offset {offset}.")
+        return []
+
     # eliminate duplicates based on job title and company
-    if not jobs_df.empty:
-        jobs_df = jobs_df.drop_duplicates(subset=['title', 'company'])
+    jobs_df = jobs_df.drop_duplicates(subset=['title', 'company'])
     
     job_postings = []
     for _, row in jobs_df.iterrows():
@@ -76,4 +79,5 @@ def fetch_daily_jobs(
             url=str(row.get('job_url', ''))
         ))
         
+    logger.info(f"JobSpy fetched {len(jobs_df)} raw jobs. Processed into {len(job_postings)} valid postings with descriptions.")
     return job_postings

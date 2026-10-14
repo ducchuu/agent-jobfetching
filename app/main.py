@@ -12,90 +12,164 @@ import os
 import asyncio
 from contextlib import asynccontextmanager
 
+from datetime import datetime, timezone
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+pipeline_lock = asyncio.Lock()
+
+pipeline_status = {
+    "state": "idle",
+    "last_run_started": None,
+    "last_run_finished": None,
+    "skills_evaluated": 0,
+    "target_skills": 25,
+    "matches_found": 0,
+    "last_status_message": "Pipeline initialized and ready."
+}
 
 async def run_job_matching_pipeline():
-    logger.info("Starting job matching pipeline...")
-    if not os.path.exists(CACHE_PATH):
-        logger.warning("No CV profile cached. Please upload a CV first via /upload-cv.")
+    if pipeline_lock.locked():
+        logger.warning("Pipeline is already currently running. Skipping duplicate trigger.")
         return
+
+    async with pipeline_lock:
+        start_time = datetime.now(timezone.utc)
+        pipeline_status["state"] = "running"
+        pipeline_status["last_run_started"] = start_time.isoformat()
+        pipeline_status["last_status_message"] = "Pipeline running..."
+        logger.info("=" * 60)
+        logger.info("Starting daily job matching pipeline...")
+        logger.info("=" * 60)
         
-    with open(CACHE_PATH, "r") as f:
-        candidate_profile = CandidateProfile.model_validate_json(f.read())
-
-    inferred_titles = candidate_profile.target_job_titles if candidate_profile.target_job_titles else ["AI Engineer", "Data Engineer"]
-
-    target_skills_evaluations = 25 # this is a target of daily job analyzed by skills agent, after filtering of experience agent and language agent
-    skills_evaluated_count = 0
-    
-    async def process_job(job):
-        if is_job_processed(job.id):
-            logger.info(f"Skipping already processed job: {job.id}")
-            return False
+        if not os.path.exists(CACHE_PATH):
+            msg = "No CV profile cached. Please upload a CV first via /upload-cv."
+            logger.warning(msg)
+            pipeline_status["state"] = "idle"
+            pipeline_status["last_status_message"] = msg
+            return
             
-        logger.info(f"Evaluating job: {job.title} at {job.company}")
-        try:
-            match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
-            
-            if getattr(match_result, 'auto_reject', False):
-                logger.info(f"Auto-rejected role: {job.title}")
+        with open(CACHE_PATH, "r") as f:
+            candidate_profile = CandidateProfile.model_validate_json(f.read())
+
+        inferred_titles = candidate_profile.target_job_titles if candidate_profile.target_job_titles else ["AI Engineer", "Data Engineer"]
+
+        target_skills_evaluations = 25 # target of daily jobs analyzed by skills agent
+        skills_evaluated_count = 0
+        matches_found_count = 0
+        pipeline_status["target_skills"] = target_skills_evaluations
+        pipeline_status["skills_evaluated"] = 0
+        pipeline_status["matches_found"] = 0
+        
+        async def process_job(job):
+            nonlocal matches_found_count
+            if is_job_processed(job.id):
+                logger.info(f"Skipping already processed job: {job.id}")
+                return False
+                
+            logger.info(f"Evaluating job: {job.title} at {job.company}")
+            try:
+                match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
+                
+                if getattr(match_result, 'auto_reject', False):
+                    logger.info(f"Auto-rejected role: {job.title}")
+                    mark_job_processed(job.id)
+                    return match_result.is_skills_evaluated
+                    
+                if match_result.score >= settings.MATCH_THRESHOLD:
+                    matches_found_count += 1
+                    pipeline_status["matches_found"] = matches_found_count
+                    logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
+                    await send_discord_alert(job, match_result)
                 mark_job_processed(job.id)
                 return match_result.is_skills_evaluated
-                
-            if match_result.score >= settings.MATCH_THRESHOLD:
-                logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
-                await send_discord_alert(job, match_result)
-            mark_job_processed(job.id)
-            return match_result.is_skills_evaluated
-        except Exception as e:
-            logger.error(f"Error evaluating job {job.id}: {e}")
-            mark_job_processed(job.id)
-            return False
+            except Exception as e:
+                logger.error(f"Error evaluating job {job.id}: {e}")
+                mark_job_processed(job.id)
+                return False
 
-    # you can define multiple locations you want to fetch jobs from, but they have to match jobspy API
-    locations = ["Netherlands"]
-    for loc in locations:
-        if skills_evaluated_count >= target_skills_evaluations:
-            break
-            
-        offset = 0
-        scrape_batch_size = 100
-        
-        while skills_evaluated_count < target_skills_evaluations:
-            logger.info(f"Fetching {scrape_batch_size} jobs for {loc} (offset: {offset})...")
-            jobs = fetch_daily_jobs(
-                target_job_titles=inferred_titles,
-                location=loc,
-                job_type="fulltime",
-                results_wanted=scrape_batch_size,
-                offset=offset
-            )
-            
-            if not jobs:
-                logger.info(f"No more jobs found for location {loc} at offset {offset}.")
+        # locations to fetch jobs from
+        locations = ["Netherlands"]
+        scrape_batch_size = 25  # 25 matches LinkedIn's pagination window and prevents burst 429
+        max_empty_retries = 3
+
+        for loc in locations:
+            if skills_evaluated_count >= target_skills_evaluations:
                 break
                 
-            offset += scrape_batch_size
-            logger.info(f"Scraper finished batch. Found {len(jobs)} jobs to process.")
+            offset = 0
+            consecutive_empty_batches = 0
             
-            eval_batch_size = 5
-            for i in range(0, len(jobs), eval_batch_size):
-                if skills_evaluated_count >= target_skills_evaluations:
-                    logger.info(f"Reached target of {target_skills_evaluations} skills evaluations for today. Stopping.")
-                    break
-                    
-                batch = jobs[i:i+eval_batch_size]
-                results = await asyncio.gather(*(process_job(job) for job in batch))
+            while skills_evaluated_count < target_skills_evaluations:
+                logger.info(f"Fetching {scrape_batch_size} jobs for {loc} (offset: {offset})...")
+                jobs = fetch_daily_jobs(
+                    target_job_titles=inferred_titles,
+                    location=loc,
+                    job_type="fulltime",
+                    results_wanted=scrape_batch_size,
+                    offset=offset
+                )
                 
-                skills_evaluated_count += sum(bool(res) for res in results)
-                logger.info(f"Progress: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated.")
+                if not jobs:
+                    consecutive_empty_batches += 1
+                    if consecutive_empty_batches <= max_empty_retries:
+                        backoff_seconds = 60 * consecutive_empty_batches
+                        logger.warning(
+                            f"No jobs returned at offset {offset} (possible LinkedIn 429 rate limit or temporary cooldown). "
+                            f"Waiting {backoff_seconds}s for rate-limit reset before retry {consecutive_empty_batches}/{max_empty_retries}..."
+                        )
+                        await asyncio.sleep(backoff_seconds)
+                        continue
+                    else:
+                        logger.info(
+                            f"No more jobs found for location {loc} at offset {offset} after {max_empty_retries} retries."
+                        )
+                        break
 
-            if skills_evaluated_count < target_skills_evaluations:
-                logger.info("Pausing 15 seconds before fetching next scraper batch to prevent rate limiting (LinkedIn 429)...")
-                await asyncio.sleep(15)
+                consecutive_empty_batches = 0
+                offset += scrape_batch_size
+                logger.info(f"Scraper finished batch. Found {len(jobs)} jobs to process.")
+                
+                eval_batch_size = 5
+                for i in range(0, len(jobs), eval_batch_size):
+                    if skills_evaluated_count >= target_skills_evaluations:
+                        logger.info(f"Reached target of {target_skills_evaluations} skills evaluations for today. Stopping.")
+                        break
+                        
+                    batch = jobs[i:i+eval_batch_size]
+                    results = await asyncio.gather(*(process_job(job) for job in batch))
+                    
+                    skills_evaluated_count += sum(bool(res) for res in results)
+                    pipeline_status["skills_evaluated"] = skills_evaluated_count
+                    logger.info(f"Progress: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated.")
+
+                if skills_evaluated_count < target_skills_evaluations:
+                    logger.info("Pausing 25 seconds before fetching next scraper batch to prevent rate limiting (LinkedIn 429)...")
+                    await asyncio.sleep(25)
+
+        end_time = datetime.now(timezone.utc)
+        pipeline_status["state"] = "idle"
+        pipeline_status["last_run_finished"] = end_time.isoformat()
+        pipeline_status["skills_evaluated"] = skills_evaluated_count
+        pipeline_status["matches_found"] = matches_found_count
+        status_msg = (
+            f"Pipeline completed: {skills_evaluated_count}/{target_skills_evaluations} skills evaluated, "
+            f"{matches_found_count} matches sent to Discord. Waiting for next scheduled run at 07:00 AM."
+        )
+        pipeline_status["last_status_message"] = status_msg
+
+        logger.info("=" * 60)
+        logger.info("=== Job Matching Pipeline Finished ===")
+        logger.info(f"Skills Evaluated: {skills_evaluated_count}/{target_skills_evaluations}")
+        logger.info(f"Matches Found: {matches_found_count}")
+        if skills_evaluated_count >= target_skills_evaluations:
+            logger.info("Status: Daily evaluation target reached successfully.")
+        else:
+            logger.info(f"Status: Finished early because available listings were exhausted for {locations}.")
+        logger.info("Next automatic run scheduled for tomorrow at 07:00 AM (or via POST /trigger-pipeline).")
+        logger.info("=" * 60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,8 +195,14 @@ async def upload_cv(file: UploadFile = File(...)):
 
 @app.post("/trigger-pipeline")
 async def trigger_pipeline(background_tasks: BackgroundTasks):
+    if pipeline_lock.locked():
+        return {"status": "busy", "message": "Pipeline is already currently running."}
     background_tasks.add_task(run_job_matching_pipeline)
     return {"message": "Pipeline triggered in the background."}
+
+@app.get("/pipeline-status")
+async def get_pipeline_status():
+    return pipeline_status
 
 @app.get("/profile")
 async def get_profile():
@@ -134,4 +214,8 @@ async def get_profile():
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Job Fetching Agent is running."}
+    return {
+        "status": "ok",
+        "message": "Job Fetching Agent is running.",
+        "pipeline": pipeline_status
+    }

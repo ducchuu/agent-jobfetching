@@ -1,6 +1,9 @@
 import httpx
+import logging
 from app.config import settings
 from app.models.schemas import JobPosting, MatchResult
+
+logger = logging.getLogger(__name__)
 
 async def send_discord_alert(job: JobPosting, match: MatchResult):
     color = 0x00FF00 if match.score >= 90 else 0xFFA500 # green for >= 90, orange for <80,90)
@@ -19,5 +22,10 @@ async def send_discord_alert(job: JobPosting, match: MatchResult):
         }]
     }
     
-    async with httpx.AsyncClient() as client:
-        await client.post(settings.DISCORD_WEBHOOK_URL, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(settings.DISCORD_WEBHOOK_URL, json=payload)
+            if resp.status_code >= 400:
+                logger.warning(f"Discord webhook returned status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logger.error(f"Failed to send Discord alert for job {job.id}: {e}")
