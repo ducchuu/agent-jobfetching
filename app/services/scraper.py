@@ -2,8 +2,13 @@ from jobspy import scrape_jobs
 from app.models.schemas import JobPosting
 import logging
 import re
+import socket
 
 logger = logging.getLogger(__name__)
+
+class NetworkError(Exception):
+    # for raising error when a DNS or TCP connectivity failure 
+    pass
 
 def fetch_daily_jobs(
     target_job_titles: list[str], 
@@ -30,6 +35,10 @@ def fetch_daily_jobs(
             linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
         )
     except Exception as e:
+        err_str = str(e)
+        # NameResolutionError / socket.gaierror both indicate DNS failure
+        if "NameResolutionError" in err_str or "Failed to resolve" in err_str or isinstance(e, socket.gaierror):
+            raise NetworkError(f"DNS/network failure during scrape: {e}") from e
         logger.error(f"Scraper error during scrape_jobs (offset {offset}): {e}")
         return []
     

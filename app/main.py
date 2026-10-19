@@ -1,15 +1,17 @@
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from zoneinfo import ZoneInfo
 from app.core.database import init_db, is_job_processed, mark_job_processed
-from app.services.scraper import fetch_daily_jobs
+from app.services.scraper import fetch_daily_jobs, NetworkError
 from app.services.cv_parser import extract_profile_from_pdf, CACHE_PATH
 from app.agent.matcher import evaluate_job
-from app.services.notifier import send_discord_alert
+from app.services.notifier import send_discord_alert, send_discord_infra_alert
 from app.config import settings
 from app.models.schemas import CandidateProfile
 import logging
 import os
 import asyncio
+import socket
 from contextlib import asynccontextmanager
 
 from datetime import datetime, timezone
@@ -17,7 +19,8 @@ from datetime import datetime, timezone
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+AMSTERDAM_TZ = ZoneInfo("Europe/Amsterdam")
+scheduler = AsyncIOScheduler(timezone=AMSTERDAM_TZ)
 pipeline_lock = asyncio.Lock()
 
 pipeline_status = {
@@ -29,6 +32,18 @@ pipeline_status = {
     "matches_found": 0,
     "last_status_message": "Pipeline initialized and ready."
 }
+
+async def check_network_connectivity(host: str = "8.8.8.8", port: int = 53, timeout: float = 5.0) -> bool:
+    # True if a TCP connection to host:port succeeds
+    loop = asyncio.get_event_loop()
+    try:
+        await asyncio.wait_for(
+            loop.run_in_executor(None, lambda: socket.create_connection((host, port), timeout)),
+            timeout=timeout + 1
+        )
+        return True
+    except Exception:
+        return False
 
 async def run_job_matching_pipeline():
     if pipeline_lock.locked():
@@ -50,6 +65,20 @@ async def run_job_matching_pipeline():
             pipeline_status["state"] = "idle"
             pipeline_status["last_status_message"] = msg
             return
+
+        logger.info("Running pre-flight network connectivity check...")
+        if not await check_network_connectivity():
+            msg = "Pipeline aborted: network/DNS is unreachable (could not connect to 8.8.8.8:53)."
+            logger.error(msg)
+            pipeline_status["state"] = "idle"
+            pipeline_status["last_status_message"] = msg
+            await send_discord_infra_alert(
+                "Network Down at Pipeline Start",
+                f"The daily job pipeline could not start because DNS/network is unreachable.\n"
+                f"Check the Docker container's network and re-trigger via `POST /trigger-pipeline` once connectivity is restored."
+            )
+            return
+        logger.info("Network connectivity OK.")
             
         with open(CACHE_PATH, "r") as f:
             candidate_profile = CandidateProfile.model_validate_json(f.read())
@@ -104,13 +133,27 @@ async def run_job_matching_pipeline():
             
             while skills_evaluated_count < target_skills_evaluations:
                 logger.info(f"Fetching {scrape_batch_size} jobs for {loc} (offset: {offset})...")
-                jobs = fetch_daily_jobs(
-                    target_job_titles=inferred_titles,
-                    location=loc,
-                    job_type="fulltime",
-                    results_wanted=scrape_batch_size,
-                    offset=offset
-                )
+                try:
+                    jobs = fetch_daily_jobs(
+                        target_job_titles=inferred_titles,
+                        location=loc,
+                        job_type="fulltime",
+                        results_wanted=scrape_batch_size,
+                        offset=offset
+                    )
+                except NetworkError as e:
+                    # breaks the pipeline so that API calls are not wasted from JobSpy and triggers the network  error message to discord
+                    err_msg = str(e)
+                    logger.error(f"Network failure detected (not a 429). Aborting pipeline. Details: {err_msg}")
+                    await send_discord_infra_alert(
+                        "Network Failure During Pipeline",
+                        f"The job pipeline was aborted mid-run due to a DNS/network error.\n"
+                        f"**Error:** `{err_msg}`\n"
+                        f"Re-trigger via `POST /trigger-pipeline` once connectivity is restored."
+                    )
+                    pipeline_status["last_status_message"] = f"Aborted: network failure — {err_msg}"
+                    consecutive_empty_batches = max_empty_retries + 1
+                    break
                 
                 if not jobs:
                     consecutive_empty_batches += 1
