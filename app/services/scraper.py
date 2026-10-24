@@ -28,9 +28,10 @@ def fetch_daily_jobs(
             site_name=["linkedin", "indeed"],
             search_term=search_query,
             location=location,
+            job_type=job_type,
             results_wanted=results_wanted,
             offset=offset,
-            hours_old=168, # only jobs posted in the last 3 days
+            hours_old=168, # only jobs posted in the last 7 days
             country_indeed='Netherlands',
             linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
         )
@@ -59,10 +60,9 @@ def fetch_daily_jobs(
             
         raw_desc = str(row['description'])
         
-        # 1st token optimization technique of stripping all unneccessary content from the fetched jobs, that doesn't really match the skills agent purpose
-        boilerplate_patterns = [
-            r"(?i)\b(about the company)\b",
-            r"(?i)\b(benefits & perks)\b",
+        # Token optimization: Strip only trailing HR boilerplate if it occurs in the bottom half of the JD
+        trailing_boilerplate = [
+            r"(?i)\b(benefits\s*(&|and)?\s*perks)\b",
             r"(?i)\b(what we offer)\b",
             r"(?i)\b(equal opportunity employer)\b",
             r"(?i)\b(diversity and inclusion)\b",
@@ -71,9 +71,10 @@ def fetch_daily_jobs(
         ]
         
         cleaned_desc = raw_desc
-        for pattern in boilerplate_patterns:
+        min_cutoff_pos = int(len(cleaned_desc) * 0.55)
+        for pattern in trailing_boilerplate:
             match = re.search(pattern, cleaned_desc)
-            if match:
+            if match and match.start() >= min_cutoff_pos:
                 cleaned_desc = cleaned_desc[:match.start()].strip()
                 break
                 

@@ -31,5 +31,41 @@ def test_job_processing_logic():
     # it is now processed
     assert is_job_processed(job_id)
     
-    # check whetherduplicate insertion doesn't crash (SQLite INSERT OR IGNORE)
+    # check whether duplicate insertion doesn't crash (SQLite INSERT OR IGNORE / ON CONFLICT)
     mark_job_processed(job_id)
+
+@patch('app.core.database.DB_PATH', TEST_DB)
+def test_cross_platform_fingerprint_deduplication():
+    from app.core.database import record_job_status, STATUS_EVALUATED, STATUS_ERROR_TRANSIENT
+    
+    # Simulate LinkedIn posting
+    record_job_status(
+        job_id="li-12345",
+        company="ASML",
+        title="Robotics Engineer",
+        status=STATUS_EVALUATED,
+        score=92,
+        reasoning="Strong robotics background"
+    )
+    
+    # Job with same title and company scraped from Indeed with different job_id
+    assert is_job_processed("in-99999", company="ASML", title="Robotics Engineer")
+    
+    # Different title should not match
+    assert not is_job_processed("in-88888", company="ASML", title="Frontend Developer")
+
+@patch('app.core.database.DB_PATH', TEST_DB)
+def test_transient_error_not_marked_processed():
+    from app.core.database import record_job_status, STATUS_ERROR_TRANSIENT
+    
+    job_id = "job_timeout"
+    record_job_status(
+        job_id=job_id,
+        company="StartupX",
+        title="AI Engineer",
+        status=STATUS_ERROR_TRANSIENT,
+        reasoning="Connection timeout"
+    )
+    
+    # Because it is a transient error, it must remain eligible for retry
+    assert not is_job_processed(job_id, company="StartupX", title="AI Engineer")

@@ -1,10 +1,12 @@
-import asyncio
+import pytest
 from app.agent.skills_agent import evaluate_skills
 from app.models.schemas import CandidateProfile, JobPosting, Project
 
-async def test_skills():
+@pytest.mark.integration
+async def test_skills_live_integration():
     profile = CandidateProfile(
         name="Test",
+        academic_level="BSc",
         skills=["Python"],
         languages=["English"],
         projects=[Project(name="Test", technologies=["Python"], description="Test")],
@@ -18,13 +20,7 @@ async def test_skills():
         description="We need a Python developer.",
         url="test.com"
     )
-    print("Testing evaluate_skills...")
-    try:
-        res = await evaluate_skills(profile, job)
-        print("Result:", res)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    asyncio.run(test_skills())
+    res = await evaluate_skills(profile, job)
+    assert res.is_skills_evaluated is True
+    assert 0 <= res.score <= 100
+    assert res.rubric is not None

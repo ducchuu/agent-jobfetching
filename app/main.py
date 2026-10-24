@@ -1,10 +1,17 @@
-from fastapi import FastAPI, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File, HTTPException, Security, status, Depends
+from fastapi.security import APIKeyHeader
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from zoneinfo import ZoneInfo
-from app.core.database import init_db, is_job_processed, mark_job_processed
+from typing import Optional
+from app.core.database import (
+    init_db, is_job_processed, record_job_status, mark_job_processed,
+    STATUS_FILTERED_BOT, STATUS_FILTERED_LANG, STATUS_FILTERED_EXP,
+    STATUS_EVALUATED, STATUS_ERROR_TRANSIENT
+)
 from app.services.scraper import fetch_daily_jobs, NetworkError
-from app.services.cv_parser import extract_profile_from_pdf, CACHE_PATH
+from app.services.cv_parser import extract_profile_from_pdf_bytes, CACHE_PATH
 from app.agent.matcher import evaluate_job
+from app.agent.llm_router import EvaluationTransientError
 from app.services.notifier import send_discord_alert, send_discord_infra_alert
 from app.config import settings
 from app.models.schemas import CandidateProfile
@@ -23,6 +30,17 @@ AMSTERDAM_TZ = ZoneInfo("Europe/Amsterdam")
 scheduler = AsyncIOScheduler(timezone=AMSTERDAM_TZ)
 pipeline_lock = asyncio.Lock()
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: Optional[str] = Security(api_key_header)):
+    if settings.API_SECRET_KEY:
+        if not api_key or api_key != settings.API_SECRET_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or missing X-API-Key header"
+            )
+    return api_key
+
 pipeline_status = {
     "state": "idle",
     "last_run_started": None,
@@ -34,14 +52,16 @@ pipeline_status = {
 }
 
 async def check_network_connectivity(host: str = "8.8.8.8", port: int = 53, timeout: float = 5.0) -> bool:
-    # True if a TCP connection to host:port succeeds
-    loop = asyncio.get_event_loop()
+    def _connect():
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+
+    loop = asyncio.get_running_loop()
     try:
-        await asyncio.wait_for(
-            loop.run_in_executor(None, lambda: socket.create_connection((host, port), timeout)),
+        return await asyncio.wait_for(
+            loop.run_in_executor(None, _connect),
             timeout=timeout + 1
         )
-        return True
     except Exception:
         return False
 
@@ -94,8 +114,8 @@ async def run_job_matching_pipeline():
         
         async def process_job(job):
             nonlocal matches_found_count
-            if is_job_processed(job.id):
-                logger.info(f"Skipping already processed job: {job.id}")
+            if is_job_processed(job.id, job.company, job.title):
+                logger.info(f"Skipping already processed job (ID or Fingerprint): {job.title} at {job.company}")
                 return False
                 
             logger.info(f"Evaluating job: {job.title} at {job.company}")
@@ -103,8 +123,25 @@ async def run_job_matching_pipeline():
                 match_result = await evaluate_job(candidate_profile, job, target_yoe=0)
                 
                 if getattr(match_result, 'auto_reject', False):
-                    logger.info(f"Auto-rejected role: {job.title}")
-                    mark_job_processed(job.id)
+                    logger.info(f"Auto-rejected role: {job.title} ({match_result.reasoning})")
+                    reason_lower = (match_result.reasoning or "").lower()
+                    if "anti-bot" in reason_lower or "captcha" in reason_lower:
+                        filter_status = STATUS_FILTERED_BOT
+                    elif "language" in reason_lower:
+                        filter_status = STATUS_FILTERED_LANG
+                    elif "experience" in reason_lower:
+                        filter_status = STATUS_FILTERED_EXP
+                    else:
+                        filter_status = STATUS_EVALUATED
+                        
+                    record_job_status(
+                        job_id=job.id,
+                        company=job.company,
+                        title=job.title,
+                        status=filter_status,
+                        score=match_result.score,
+                        reasoning=match_result.reasoning
+                    )
                     return match_result.is_skills_evaluated
                     
                 if match_result.score >= settings.MATCH_THRESHOLD:
@@ -112,11 +149,35 @@ async def run_job_matching_pipeline():
                     pipeline_status["matches_found"] = matches_found_count
                     logger.info(f"Match found! Score: {match_result.score}. Sending Discord alert...")
                     await send_discord_alert(job, match_result)
-                mark_job_processed(job.id)
+
+                record_job_status(
+                    job_id=job.id,
+                    company=job.company,
+                    title=job.title,
+                    status=STATUS_EVALUATED,
+                    score=match_result.score,
+                    reasoning=match_result.reasoning
+                )
                 return match_result.is_skills_evaluated
+            except EvaluationTransientError as e:
+                logger.warning(f"Transient evaluation error for job {job.id} at {job.company}: {e}. Retrying on next run.")
+                record_job_status(
+                    job_id=job.id,
+                    company=job.company,
+                    title=job.title,
+                    status=STATUS_ERROR_TRANSIENT,
+                    reasoning=str(e)
+                )
+                return False
             except Exception as e:
                 logger.error(f"Error evaluating job {job.id}: {e}")
-                mark_job_processed(job.id)
+                record_job_status(
+                    job_id=job.id,
+                    company=job.company,
+                    title=job.title,
+                    status=STATUS_ERROR_TRANSIENT,
+                    reasoning=str(e)
+                )
                 return False
 
         # locations to fetch jobs from
@@ -134,7 +195,8 @@ async def run_job_matching_pipeline():
             while skills_evaluated_count < target_skills_evaluations:
                 logger.info(f"Fetching {scrape_batch_size} jobs for {loc} (offset: {offset})...")
                 try:
-                    jobs = fetch_daily_jobs(
+                    jobs = await asyncio.to_thread(
+                        fetch_daily_jobs,
                         target_job_titles=inferred_titles,
                         location=loc,
                         job_type="fulltime",
@@ -226,17 +288,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Job Postings Fetching Agent", lifespan=lifespan)
 
-@app.post("/upload-cv")
+@app.post("/upload-cv", dependencies=[Depends(verify_api_key)])
 async def upload_cv(file: UploadFile = File(...)):
-    os.makedirs("data", exist_ok=True)
-    pdf_path = f"data/{file.filename}"
-    with open(pdf_path, "wb") as f:
-        f.write(await file.read())
-        
-    profile = await extract_profile_from_pdf(pdf_path)
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+    pdf_bytes = await file.read()
+    profile = await extract_profile_from_pdf_bytes(pdf_bytes)
     return {"message": "CV processed and cached successfully.", "profile": profile.model_dump()}
 
-@app.post("/trigger-pipeline")
+@app.post("/trigger-pipeline", dependencies=[Depends(verify_api_key)])
 async def trigger_pipeline(background_tasks: BackgroundTasks):
     if pipeline_lock.locked():
         return {"status": "busy", "message": "Pipeline is already currently running."}
@@ -247,7 +307,7 @@ async def trigger_pipeline(background_tasks: BackgroundTasks):
 async def get_pipeline_status():
     return pipeline_status
 
-@app.get("/profile")
+@app.get("/profile", dependencies=[Depends(verify_api_key)])
 async def get_profile():
     if not os.path.exists(CACHE_PATH):
         return {"status": "error", "message": "No profile found on the server."}

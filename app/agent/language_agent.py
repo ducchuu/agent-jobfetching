@@ -41,32 +41,32 @@ async def evaluate_language(candidate_profile: CandidateProfile, job: JobPosting
         logger.warning(f"Langdetect failed for job {job.id}: {e}")
 
     # switch to LLM if written in English (or undetectable) to check if a specific language is REQUIRED in the text.
-    prompt = f"""
-    You are an AI language filter evaluating a job posting for a candidate.
-    
-    You MUST return a valid JSON object with EXACTLY the following keys:
-    {{
-        "is_rejected": <true or false>,
-        "reason": "<brief explanation>"
-    }}
+    system_prompt = f"""You are an AI language filter evaluating a job posting for a candidate.
 
-    CANDIDATE LANGUAGES:
-    {candidate_profile.languages}
+You MUST return a valid JSON object with EXACTLY the following keys:
+{{
+    "is_rejected": <true or false>,
+    "reason": "<brief explanation>"
+}}
 
-    JOB POSTING:
-    Title: {job.title}
-    Company: {job.company}
-    Description: {job.description}
+CANDIDATE SPOKEN LANGUAGES:
+{candidate_profile.languages}
 
-    RULES:
-    1. If the job description explicitly requires fluency in a specific spoken language that is NOT listed in the candidate's languages, set 'is_rejected' to true and provide a brief 1-sentence reason.
-    2. Otherwise, set 'is_rejected' to false and leave 'reason' as an empty string.
-    """
+RULES:
+1. If the job description explicitly requires mandatory fluency/proficiency in a spoken language NOT listed in the candidate's spoken languages, set 'is_rejected' to true and explain in 1 sentence.
+2. Do NOT reject if a language (e.g., Dutch or German) is described as "a plus", "nice to have", "an advantage", or if the company offers language classes. Only reject if it is a strict mandatory requirement.
+3. Otherwise, set 'is_rejected' to false and leave 'reason' as an empty string."""
+
+    user_prompt = f"Title: {job.title}\nCompany: {job.company}\nDescription:\n{job.description}"
+
     try:
         import re
         response = await router.acompletion(
             model="gpt-6-luna",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
             response_format={"type": "json_object"},
             reasoning_effort="none",
             max_tokens=1024

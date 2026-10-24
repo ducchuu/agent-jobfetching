@@ -43,3 +43,27 @@ def test_fetch_daily_jobs_skips_empty_description(mock_scrape_jobs):
     
     # should skip the job because it has no description
     assert len(jobs) == 0
+
+@patch('app.services.scraper.scrape_jobs')
+def test_fetch_daily_jobs_safe_boilerplate_slicing(mock_scrape_jobs):
+    long_desc = (
+        "About the Company: We are an innovative AI robotics lab in Delft.\n"
+        "Requirements:\n" + ("Python, PyTorch, ROS2, Linux. " * 30) + "\n"
+        "What we offer:\nFree lunch, ping pong table, healthcare benefits."
+    )
+    df = pd.DataFrame({
+        'id': ['safe_1'],
+        'title': ['Robotics Engineer'],
+        'company': ['RoboTech'],
+        'description': [long_desc],
+        'job_url': ['https://example.com/job']
+    })
+    mock_scrape_jobs.return_value = df
+    
+    jobs = fetch_daily_jobs(target_job_titles=["Robotics Engineer"])
+    assert len(jobs) == 1
+    # Check that "About the Company" at start was NOT sliced
+    assert "About the Company" in jobs[0].description
+    assert "Requirements:" in jobs[0].description
+    # Check that trailing boilerplate was sliced
+    assert "Free lunch" not in jobs[0].description

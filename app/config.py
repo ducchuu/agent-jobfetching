@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     OPENAI_API_KEY: str
@@ -9,6 +10,7 @@ class Settings(BaseSettings):
     DISCORD_WEBHOOK_URL: str
     MATCH_THRESHOLD: int = 80
     CLOUDFLARE_TUNNEL_TOKEN: str = ""
+    API_SECRET_KEY: Optional[str] = None
     
     model_config = {"env_file": ".env", "extra": "ignore"}
 

@@ -1,91 +1,144 @@
 # AI Job Fetching Agent
 
-An automated pipeline designed to scrape, evaluate, and fetch job listings daily, and give a matching score tailored to specific criteria and user's profile. This project uses web scraping and the LLM to match job descriptions against user-defined preferences.
+A self-hosted job-discovery service that converts a CV into a structured candidate profile, evaluates scraped job postings, and sends matching opportunities to Discord. It combines concurrent eligibility checks, structured LLM rubric extraction, deterministic Python scoring, and persistent processing state.
 
-- **Job Scraping**: Automatically fetches job listings (e.g., AI Engineer, Robotics Engineer) in specified locations, using JobSpy API (`https://github.com/speedyapply/JobSpy`).
-- **Multi-Agent Evaluation Pipeline**: Analyzes job descriptions using a funnel of multiple specialized AI agents (Language, Experience, and Skills) to accurately determine match scores while optimizing costs.
-- **Dockerized API**: Fully containerized FastAPI backend.
-- **Cloudflare Tunnels**: Ready to be securely exposed to the web using Cloudflare Tunnels. (optional)
+> **Current Release Scope:** Single candidate profile and single application process. The scheduler, pipeline lock, and live status are process-local. Match scores are heuristic relevance ratings; model outputs and audit decisions remain model-dependent.
 
+---
 
-## Guidance to run
+## Demonstration
 
-### 1. Personalize
-The project is based on prompt engineering through the pipeline, therefore the prompts might have to be adjusted to match the candidate's needs, if you profile is different than mine. In my case, I am a recent graduate, I do not have the relevant work experience yet, therefore I specify how to handle this and describe instructions on how to calculate the match score.
+When the multi-agent pipeline finds a relevant job that passes the language filter, experience gatekeeper, and reaches the configured score threshold, it formats a rich notification and sends a Discord webhook alert.
 
-Hence you might want to update:
+![Discord Alert Demonstration](./data/demonstration_discord_alert.png)
 
-`app/services/cv_parser.py`
+---
 
-and maybe the specific agent files inside `app/agent/`:
-- `language_agent.py`
-- `experience_agent.py`
-- `skills_agent.py`
+## Core Features
 
+- **Automated Web Scraping:** Queries LinkedIn and Indeed via the `jobspy` library for targeted engineering titles and locations.
+- **Concurrent Eligibility Filtering:** Runs fast spoken-language and experience/seniority checks concurrently in LangGraph before invoking the more expensive skills evaluator.
+- **Structured Rubric Extraction:** Extracts concrete evidence (`matched_core_skills`, `missing_core_skills`, `missing_secondary_skills`, `project_relevance_bonus`, `hard_dealbreaker_found`) using Pydantic schemas.
+- **Deterministic Python Scoring:** Computes the final match score in application code using fixed mathematical weights rather than relying on unreliable LLM arithmetic.
+- **Devil's Advocate Audit:** Performs a secondary verification on roles meeting the match threshold to check for hallucinations and strict non-technical dealbreakers.
+- **Persistent Processing State:** SQLite database tracks job statuses (`FILTERED_LANG`, `FILTERED_EXP`, `FILTERED_BOT`, `EVALUATED`, `ERROR_TRANSIENT`) with source ID and normalized fingerprint deduplication.
+- **Containerized API & Tunnel Ready:** Fully dockerized FastAPI service with optional Cloudflare Tunnel configuration and API key authentication.
 
-### 2. Quick Start (Local Testing)
-The easiest way to use the pipeline locally is using Docker.
+---
 
-1. **Configure Environment:** 
-   Copy `.env.example` to `.env` and add your API keys (and your DISCORD_WEBHOOK_URL to receive match alerts!).
-2. **Start backend:**
-   ```bash
-   docker-compose up -d --build
-   ```
-3. **Upload a CV:**
-   Use the `/upload-cv` endpoint to parse and cache a candidate profile as json file extracted by the cv parser script.
-   ```bash
-   curl -X POST "http://localhost:8000/upload-cv" \
-        -H "accept: application/json" \
-        -H "Content-Type: multipart/form-data" \
-        -F "file=@/path/to/your/resume.pdf"
-   ```
-4. **Trigger the Pipeline:**
-   Start the multi-agent scraping and evaluation pipeline in the background.
-   ```bash
-   curl -X POST "http://localhost:8000/trigger-pipeline" \
-        -H "accept: application/json" -d ""
-   ```
-5. **Watch the Agents Work:**
-   ```bash
-   docker-compose logs -f api
-   ```
+## Model Configuration
 
-### 3. Advanced Deployment (Production)
-The provided `docker-compose.yml` is already configured to optionally expose the API to the web via a **Cloudflare Tunnel** (cloudflared). This is useful if you are hosting the agent on a home server and want to trigger pipelines remotely or receive webhooks securely without opening router ports.
+Model routing and provider fallbacks are managed centrally in `app/agent/llm_router.py` using `litellm.Router`:
 
-1. Ensure your `CLOUDFLARE_TUNNEL_TOKEN` is set in your `.env` file.
-2. The `cloudflared` service in `docker-compose.yml` will automatically route external traffic to the internal API container.
+| Pipeline Role | Primary Model Alias | Fallback Model Alias | Provider | Purpose |
+|---|---|---|---|---|
+| **CV Extraction** | `claude-5-5-sonnet` | — | Anthropic | Parses uploaded PDF into structured `CandidateProfile` |
+| **Language Filter** | `gpt-6-luna` | `claude-4-5-haiku` | OpenAI / Anthropic | Fallback check for mandatory foreign language fluency |
+| **Experience Filter** | `gpt-6-luna` | `claude-4-5-haiku` | OpenAI / Anthropic | Validates Years of Experience (YoE) and academic degree levels |
+| **Skills Evaluation** | `gpt-6.1-sol` | `claude-5-5-sonnet` | OpenAI / Anthropic | Extracts `SkillsRubricOutput` using cache-eligible prompt prefix |
+| **Audit (Devil's Advocate)** | `gpt-6-luna` | `claude-4-5-haiku` | OpenAI / Anthropic | Secondary audit of high-scoring matches for dealbreakers |
 
+---
 
-### 4. Local Development (Without Docker) - in case someone does not have Docker installed; Python 3 is still required though
+## Quick Start (Local Testing with Docker)
+
+### 1. Configure Environment
+Copy `.env.example` to `.env` and fill in your API keys:
+```bash
+cp .env.example .env
+```
+
+### 2. Start the Backend
+```bash
+docker compose up -d --build
+```
+
+### 3. Upload a CV
+Upload your resume in PDF format to parse and cache the candidate profile:
+```bash
+curl -X POST "http://localhost:8000/upload-cv" \
+     -H "accept: application/json" \
+     -H "Content-Type: multipart/form-data" \
+     -F "file=@/path/to/your/resume.pdf"
+```
+
+### 4. Trigger the Pipeline
+Start the scraping and multi-agent evaluation pipeline in the background:
+```bash
+curl -X POST "http://localhost:8000/trigger-pipeline" \
+     -H "accept: application/json" -d ""
+```
+
+### 5. View Logs
+```bash
+docker compose logs -f api
+```
+
+---
+
+## Deployment & Security
+
+The provided `docker-compose.yml` includes an optional **Cloudflare Tunnel** (`cloudflared`) service. This allows securely exposing the API on a home server without opening router ports.
+
+### Authentication Boundary
+> **Important:** Configure `API_SECRET_KEY` in `.env` before exposing the service publicly. Unauthenticated operation is intended solely for local development.
+
+When `API_SECRET_KEY` is configured:
+* Protected endpoints (`/upload-cv`, `/trigger-pipeline`, `/profile`) strictly require an `X-API-Key` header matching your secret.
+* Missing or invalid keys return `403 Forbidden`.
+* Public read endpoints (`/`, `/pipeline-status`) remain accessible for uptime monitoring.
+
+**Example authenticated requests:**
+```bash
+# Trigger pipeline
+curl -X POST "http://localhost:8000/trigger-pipeline" \
+     -H "X-API-Key: YOUR_API_SECRET_KEY"
+
+# Fetch candidate profile
+curl -X GET "http://localhost:8000/profile" \
+     -H "X-API-Key: YOUR_API_SECRET_KEY"
+```
+
+---
+
+## Local Development (Without Docker)
+
 1. **Create and activate a virtual environment:**
    ```bash
-   python -m venv venv
-   source venv/bin/activate
+   python -m venv .venv
+   source .venv/bin/activate
    ```
 2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
-3. **Configure Environment:** 
-   Copy `.env.example` to `.env` and add your API keys (and your DISCORD_WEBHOOK_URL to receive match alerts!).
-4. **Run the API:**
+3. **Run Unit Tests (Offline & Deterministic):**
+   ```bash
+   pytest
+   ```
+   *The default test suite uses mocked model responses and runs offline with zero network calls and zero token cost.*
+   
+   To run live integration smoke tests against real provider APIs:
+   ```bash
+   pytest -m integration
+   ```
+4. **Start the API Server:**
    ```bash
    uvicorn app.main:app --reload
    ```
 
+---
 
 ## Pipeline Architecture & Data Flow
 
-To ensure high accuracy and low cost, the evaluation process is orchestrated as a stateful graph using **LangGraph**. Cheap and fast filters (langdetect and gpt-6-luna) run in parallel to remove irrelevant jobs early, reserving the more expensive, high-intelligence model (gpt-6.1-sol) only for the best matches.
+The evaluation workflow is orchestrated as a state graph using **LangGraph**:
 
 ```mermaid
 flowchart TD
-    A[Fetched Job] --> V[Scraper Validation]
-    V -- "Anti-bot text detected" --> R1[Auto-Reject]
+    A[Scraped Job Posting] --> V[Scraper Validation]
+    V -- "Anti-bot text detected" --> R1[Auto-Reject & Store]
     
-    V -- "Valid Text" --> PA((Parallel Agents))
+    V -- "Valid Text" --> PA((Parallel Filters))
     PA --> B[Language Filter]
     PA --> C[Experience & Academic Filter]
     
@@ -95,98 +148,155 @@ flowchart TD
     B -- "Pass" --> J((Join))
     C -- "Pass" --> J
     
-    J --> S[Strategy Generator]
-    S -- "Dynamic Focus Strategy" --> D[Skills Matcher Agent]
+    J --> D[Skills Matcher Agent<br/>Structured Rubric Extraction]
+    D --> M[Deterministic Python Scoring]
     
-    D -- "Score > 85" --> DA[Devil's Advocate]
-    D -- "Score <= 85" --> E[Final Score & Feedback]
+    M -- "Score >= Threshold" --> DA[Devil's Advocate Audit]
+    M -- "Score < Threshold" --> S1[Store in SQLite]
     
-    DA -- "Critical Flaw Found" --> P[Penalize Score]
-    DA -- "Valid" --> E
-    P --> E
+    DA -- "Hard Dealbreaker Found" --> R2[Score = 0 & Store]
+    DA -- "Skill Discrepancies" --> P[Apply 1-15pt Penalty]
+    DA -- "Audit Passed / Call Failed" --> DEC{Score >= Threshold?}
+    P --> DEC
     
+    DEC -- Yes --> N[Send Discord Alert & Store]
+    DEC -- No --> S1
+
     style R1 fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#000
-    style E fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000
+    style R2 fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#000
+    style N fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000
+    style S1 fill:#f8f9fa,stroke:#6c757d,color:#000
     style B fill:#e2f0d9,stroke:#548235,color:#000
     style C fill:#e2f0d9,stroke:#548235,color:#000
-    style S fill:#fff3cd,stroke:#856404,color:#000
     style D fill:#cce5ff,stroke:#004085,color:#000
+    style M fill:#fff3cd,stroke:#856404,color:#000
     style DA fill:#f8d7da,stroke:#721c24,color:#000
+    style P fill:#ffebee,stroke:#c62828,color:#000
 ```
+
+### Graph Stages & Execution Details
+
+1. **Scraper Validation Node:** Rejects scraped postings filled with anti-bot/captcha text, saving LLM tokens.
+2. **Parallel Eligibility Filters:** 
+   - `language_agent` uses `langdetect` first (zero cost). If English, it invokes `gpt-6-luna` to verify mandatory language fluency requirements while tolerating "nice-to-have" languages.
+   - `experience_agent` checks title seniority via regex, then evaluates Years of Experience (YoE) and academic degree requirements via `gpt-6-luna`.
+   - Both filters run concurrently via `asyncio.gather`. After both complete, a rejection from either check skips downstream skills evaluation.
+3. **Skills Matcher Agent:** Uses `gpt-6.1-sol` with a stable prompt prefix to extract a structured `SkillsRubricOutput` Pydantic model.
+4. **Deterministic Python Scoring:** Computes the score in application code using fixed weights.
+5. **Devil's Advocate Audit Node:** Triggers when the computed score meets or exceeds `MATCH_THRESHOLD`. It acts as a secondary auditor with access to the candidate's full projects and the job description stored in `JobPosting`.
+   - **Hard Dealbreakers:** If strict non-technical barriers are found (e.g. required security clearance or mandatory relocation), the score is reset to 0 with `auto_reject = True`.
+   - **Skill Discrepancies:** If skill claims were overstated, a bounded, model-selected penalty of 1 to 15 points is applied.
+   - **Audit Policy:** The audit is best-effort. If the audit model call fails or throws an exception, the original score is retained.
+
+---
+
+## Scoring Formula & Determinism Boundary
+
+### The Mathematical Formula
+Initial scores are computed deterministically from the extracted rubric:
+
+$$\text{score} = \operatorname{clamp}_{0,100} \left( 85 + B - 10C - 3S \right)$$
+
+Where:
+- **$B \in [0, 15]$:** Model-selected project-relevance bonus based on demonstrated project depth.
+- **$C$:** Count of missing mandatory core technologies ($-10$ points each).
+- **$S$:** Count of missing secondary/tooling skills ($-3$ points each).
+- **Hard Dealbreaker:** Overrides the final score directly to $0$.
+
+### Determinism Boundary & Limitations
+- **Boundary:** Given the same validated rubric, Python arithmetic produces the exact same score. Rubric extraction and audit judgments remain model-dependent.
+- **Baseline Behavior:** `matched_core_skills` provides context for the audit stage but does not add incremental points beyond the base 85. A posting with 0 missing skills and 0 bonus scores 85. Missing skills lists default to empty if omitted. Match scores represent heuristic relevance ratings, not probabilities of hiring success.
+
+---
+
+## Concurrency, Scheduling & Limits
+
+- **Two Concurrency Levels:**
+  1. The pipeline processes postings in concurrent groups of up to five jobs via `asyncio.gather`.
+  2. Within each posting, language and experience checks also run concurrently via `asyncio.gather`.
+- **Run Target (Not a Spending Cap):**
+  - Each pipeline run targets **25 counted skills evaluations** (`target_skills_evaluations`).
+  - Because the target is checked before launching each 5-job group, a single run can complete between 25 and 29 counted evaluations.
+  - Early filter rejections and transient errors do not count toward this target.
+  - This count resets per run and does not enforce a hard monetary spending cap.
+- **Automated Schedule:**
+  - Scheduled daily at **07:00 Europe/Amsterdam** while the service is active.
+  - Can also be triggered on demand via `POST /trigger-pipeline`.
+
+---
+
+## Error Handling, Deduplication & Optimizations
+
+- **Transient Error Handling:**
+  - Network timeouts and rate limits raise an `EvaluationTransientError`.
+  - The record is saved as `status = 'ERROR_TRANSIENT'`, allowing the posting to be retried if discovered again on future runs without burning the current run's target quota.
+  - Invalid skills-rubric outputs currently become processed rejections.
+- **Heuristic Deduplication:**
+  - Postings are tracked in SQLite by source `id` and a normalized SHA-256 fingerprint generated from `company` and `title`.
+  - *Limitation:* This provides heuristic cross-platform deduplication across LinkedIn and Indeed, but may merge distinct vacancies that share the exact same title and company across different locations or teams.
+- **Prompt Prefix Caching:**
+  - The static candidate profile and 3 detailed few-shot calibration examples are placed in the system message prefix. This pushes the prefix above 1,024 tokens to become eligible for provider prompt caching. Cache usage is logged via `log_cache_metrics()`.
+- **Position-Aware Boilerplate Slicing:**
+  - Trailing boilerplate ("Benefits & Perks", "What We Offer", "Equal Opportunity Employer") is trimmed only if it occurs past the **55% mark** of the document, reducing token overhead while preserving initial company intro and requirements.
+
+---
 
 ## Project Structure
 
 ```text
 agent_jobfetching/
 ├── app/                  # Main application package
-│   ├── agent/            # Multi-agent pipeline logic
-│   │   ├── language_agent.py   # Language filter (langdetect & gpt-6-luna)
-│   │   ├── experience_agent.py # YoE and seniority filter
-│   │   ├── skills_agent.py     # Skills evaluation (gpt-6.1-sol)
-│   │   └── matcher.py          # Orchestrates the agents in sequence
+│   ├── agent/            # Multi-agent graph pipeline logic
+│   │   ├── language_agent.py   # Spoken language filter (langdetect & gpt-6-luna)
+│   │   ├── experience_agent.py # YoE and degree filter (gpt-6-luna)
+│   │   ├── skills_agent.py     # Skills evaluation & rubric extraction (gpt-6.1-sol)
+│   │   ├── matcher.py          # LangGraph state machine orchestrator
+│   │   └── llm_router.py       # LiteLLM router with fallbacks & cache logging
 │   ├── core/             # Core utilities and settings
-│   ├── models/           # Data models (Pydantic/SQLAlchemy)
-│   ├── services/         # Business logic (e.g., scraper integration)
-│   └── main.py           # Application entrypoint (FastAPI)
-├── data/                 # Directory containing the SQLite database (jobs.db)
-├── tests/                # Unit and integration tests
-├── .env.example          # Example environment variables
-├── docker-compose.yml    # Docker setup for local server & Cloudflare tunnel
-├── Dockerfile            # Docker instructions for building the API
-├── pyproject.toml        # Project configuration
+│   │   └── database.py   # SQLite state machine with fingerprint deduplication
+│   ├── models/           # Data models (Pydantic schemas & computed rubric)
+│   ├── services/         # Business logic (in-memory CV parser, non-blocking scraper, notifier)
+│   └── main.py           # Application entrypoint (FastAPI, APScheduler)
+├── data/                 # SQLite database (jobs.db) and cached profiles
+├── tests/                # Unit and integration test suite
+├── .env.example          # Environment variables template
+├── docker-compose.yml    # Docker setup for API and Cloudflare tunnel
+├── Dockerfile            # Container build instructions
+├── pyproject.toml        # pytest configuration and warning filters
 ├── requirements.txt      # Python dependencies
-├── run_job_scraper.py    # Utility script to test scraping
-└── clear_db.py           # Utility script to reset the database
+├── run_job_scraper.py    # Standalone utility script to test scraping
+└── clear_db.py           # Standalone utility script to reset SQLite database
 ```
 
-
-### The Agents & Graph Nodes:
-1. **Scraper Validation Node**: Automatically rejects scraped postings filled with anti-bot/captcha text, saving LLM tokens.
-2. **Language Agent**: Uses `langdetect` (free) to reject jobs in foreign languages, falling back to `gpt-6-luna` to verify explicit language fluency requirements. Runs in parallel with the Experience Agent.
-3. **Experience & Academic Agent**: Uses `gpt-6-luna` to strictly enforce Years of Experience (YoE) and **academic degrees** (e.g., rejecting Postdoc roles if the candidate only has a BSc).
-4. **Strategy Generator**: A cheap LLM node that dynamically generates a 1-sentence evaluation strategy specifically tailored to comparing the current JD with the candidate's profile.
-5. **Skills Matcher Agent**: Uses flagship models (`gpt-6.1-sol`) alongside the dynamic strategy to deeply analyze projects and skills for the final match score.
-6. **Devil's Advocate**: Acts as Quality Assurance. If the Skills Matcher returns a score > 85, this node re-analyzes the match to aggressively find any critical flaws the optimistic agent missed, applying heavy penalties to prevent false positives.
-
-### Cost & Token Optimization
-The pipeline includes several architectural decisions designed to minimize API costs:
-- **LangGraph Parallel Agents:** (`language_agent` and `experience_agent`) run concurrently using `asyncio.gather`. If either rejects the job, the graph aborts instantly, slashing processing latency by 50% while protecting the expensive `skills_agent` by waiting until both `language_agent` and `experience_agent` pass a succesfull job posting.
-- **Dynamic Offset Pagination:** The scraper iteratively fetches jobs in batches of 100 via offset pagination, stopping exactly when the daily budget quota of 25 evaluated jobs is met (evaluated by `skills_agent` only, after the filtering of `language_agent` and `experience_agent`).
-- **Prompt Caching:** The `skills_agent` dynamically places the static system prompt (containing the candidate's profile) at the very beginning of the API request. Because jobs are processed sequentially, OpenAI automatically caches this prompt prefix, granting a **50% token discount** and lower latency on all subsequent job evaluations in that batch (Anthropic allows cache prompting too, however their current flag models refuse these prompts because of Privacy and HR use guidelines violation).
-- **JSON Minification:** In `skills_agent.py`, the candidate's complex JSON profile is strictly minified (removing all spaces and newlines) before being sent to the LLM. This saves hundreds of whitespace tokens per API call.
-- **Job Description Boilerplate Stripping:** A regex heuristic in the scraper truncates useless HR text (like "About us", "Benefits & Perks", or "What we offer") from raw job descriptions, which is not really relevant for candidate's match scoring. This saves 300–700 input tokens per evaluated job posting without degrading technical match quality.
-- **Output Token Throttling:** API generation overhead is heavily constrained. Filter agents strictly return an empty string for reasoning if a job passes. The `skills_agent` explicitly enforces single-sentence reasoning fields and sets a strict API `max_tokens` ceiling, slashing output token costs by over 60%.
-
-#### Estimated Costs
-Based on current pricing with the optimization techniques active:
-- **Full initial run** (CV parsing + pipeline triggering with 25 jobs evaluated): **~$0.49**
-- **Daily pipeline run** (evaluating 25 jobs with CV already cached): **~$0.30**
-
-Considering the use of:
--gpt-6-luna (for experience and language agents fallback)
--gpt-6.1-sol (for skills agent)
--claude sonnet 5.5 (for CV parsing and profile extraction)
-
-
+---
 
 ## Utility Scripts
 
-There are 2 seperate `.py` scripts at the root level, like `run_job_scraper.py` and `clear_db.py`. These are used for testing and database management outside the main API loop, useful for anyone running the pipeline.
+- **`run_job_scraper.py`:** Standalone test script to verify `jobspy` scraping and inspect raw listings without invoking LLM agents.
+- **`clear_db.py`:** Resets the SQLite `processed_jobs` table if you want the pipeline to re-evaluate previously seen jobs.
 
-### `run_job_scraper.py`
-This script allows you to independently test the job scraping service without running the full AI evaluation pipeline. It fetches jobs for predefined titles (like "AI Engineer", "Robotics Engineer") in a specific location (e.g., "Netherlands") and prints the results directly to your console. 
-- It is great for debugging scraper issues, verifying API keys, and quickly checking what job data is currently available on the market when retrieving from the API key.
-- It is then also useful prompt engineering for the 3 agents. If you know what data is retrieve, you can speciilize your agents for filtering and scoring correctly.
+---
 
-### `clear_db.py`
-The agent uses a local SQLite database (`data/jobs.db`) to keep track of which jobs have already been evaluated, ensuring it doesn't process the same job twice. Running this script deletes all records from the `processed_jobs` table.
-- If you want to reset the pipeline state (for example, if you tweaked the AI agent's prompt and want it to re-evaluate jobs it previously skipped), running this script will make the pipeline treat all found jobs as brand new.
+## Proposed Multi-User Architecture (Future Roadmap - Not Implemented)
 
-## Demonstration
+> **Implementation Note:** The current release is strictly a single-profile service. The architecture below is a proposed design pattern for future multi-user scaling.
 
-When the multi-agent pipeline finds a highly relevant job that passes the language filter, experience gatekeeper, and scores high enough on the skills matcher, it automatically sends a webhook alert to Discord channel. You can read on how to set it up here:
-`https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks`
+```mermaid
+flowchart TD
+    S[1. Shared Daily Scraper] --> E[2. Single-Pass Job Metadata Extractor<br/>langdetect + 1x gpt-6-luna call per new job]
+    E --> DB[(SQLite: jobs_catalog<br/>req_langs, min_yoe, min_degree, cleaned_desc)]
+    
+    DB --> F[3. SQL Filter Fan-Out<br/>Compare metadata against N User Profiles without LLM calls]
+    
+    F --> U1[User 1 Queue<br/>Sequential Batch]
+    F --> U2[User 2 Queue<br/>Sequential Batch]
+    
+    U1 --> D1[User 1 Discord Webhook]
+    U2 --> D2[User 2 Discord Webhook]
+```
 
-
-
-![Discord Alert Demonstration](./data/demonstration_discord_alert.png)
+### Roadmap Concepts:
+1. **Decoupled Ingestion:** Scrape union of search queries once per run rather than per candidate.
+2. **Intrinsic Metadata Extraction:** Store objective constraints (`min_yoe`, `mandatory_languages`, `degree_level`) in a `jobs_catalog` table.
+3. **Zero-Token SQL Pre-Filtering:** Filter jobs against each user's profile using standard SQL queries before invoking LLMs.
+4. **Per-User Sequential Evaluation:** Process surviving jobs in user-specific batches to maximize prompt cache hits per user before dispatching alerts to individual webhooks.

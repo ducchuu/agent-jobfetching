@@ -1,32 +1,20 @@
-import asyncio
+import pytest
 from app.agent.llm_router import router
-import json
 
-async def test_llm():
-    try:
-        response = await router.acompletion(
-            model="claude-5-5-sonnet",
-            max_tokens=2048,
-            messages=[
-                {
-                    "role": "system",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "You are a helpful assistant.",
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ]
-                },
-                {
-                    "role": "user",
-                    "content": "Hello, how are you?"
-                }
-            ]
-        )
-        print("Response:", response.model_dump_json(indent=2))
-    except Exception as e:
-        print("Error:", e)
-
-if __name__ == "__main__":
-    asyncio.run(test_llm())
+@pytest.mark.integration
+async def test_llm_live_routing():
+    response = await router.acompletion(
+        model="claude-5-5-sonnet",
+        max_tokens=256,
+        messages=[
+            {
+                "role": "user",
+                "content": "Respond with the single word: OK"
+            }
+        ]
+    )
+    assert response is not None
+    assert len(response.choices) > 0
+    content = response.choices[0].message.content
+    assert content is not None
+    assert len(content.strip()) > 0

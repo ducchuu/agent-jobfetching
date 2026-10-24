@@ -2,3 +2,12 @@
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
+addopts = "-m 'not integration'"
+markers = [
+    "integration: marks tests that make live external LLM API calls (deselect with '-m \"not integration\"')",
+]
+filterwarnings = [
+    "ignore:builtin type SwigPy.*:DeprecationWarning",
+    "ignore:builtin type swigvarlink.*:DeprecationWarning",
+    "ignore:.*ReadOnly.*:UserWarning:pydantic.*",
+]
