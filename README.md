@@ -49,8 +49,8 @@ CV parsing and pipeline execution invoke paid external APIs. There is no cumulat
 ### Configure and start
 
 ```bash
-git clone https://github.com/mikolajduchlinski/agent_jobfetching.git
-cd agent_jobfetching
+git clone https://github.com/ducchuu/agent-jobfetching.git
+cd agent-jobfetching
 cp .env.example .env
 ```
 
@@ -95,7 +95,7 @@ python -m pip install -r requirements.txt
 python -m pytest
 ```
 
-The default suite uses mocked external integrations and is intended to run without provider credentials or live API calls. The reported local result is 31 passed with three live integration tests deselected. Check [GitHub Actions](https://github.com/mikolajduchlinski/agent_jobfetching/actions) for results on the current revision.
+The default suite uses mocked external integrations and is intended to run without provider credentials or live API calls. The reported local result is 31 passed with three live integration tests deselected. Check [GitHub Actions](https://github.com/ducchuu/agent-jobfetching/actions) for results on the current revision.
 
 To select live integration tests after configuring credentials:
 

@@ -294,7 +294,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
-app = FastAPI(title="Job Postings Fetching Agent", lifespan=lifespan)
+app = FastAPI(title="Job Postings Fetching Agent", version="1.0.0", lifespan=lifespan)
 
 @app.post("/upload-cv", dependencies=[Depends(verify_api_key)])
 async def upload_cv(file: UploadFile = File(...)):
