@@ -6,8 +6,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 litellm.drop_params = True
-litellm.success_callback = ["langfuse"]
-litellm.failure_callback = ["langfuse"]
+if settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+    litellm.success_callback = ["langfuse"]
+    litellm.failure_callback = ["langfuse"]
+else:
+    litellm.success_callback = []
+    litellm.failure_callback = []
 
 class EvaluationTransientError(Exception):
     """Raised when an LLM call fails due to transient network, timeout, or rate-limit errors."""

@@ -7,6 +7,7 @@ class JobPosting(BaseModel):
     company: str
     description: str
     url: str
+    raw_description: str = ""
 
 class LanguageFilterResult(BaseModel):
     is_rejected: bool = Field(..., description="True if the job is written in a language the candidate doesn't speak, or requires a language they don't have.")
@@ -26,6 +27,23 @@ class SkillsRubricOutput(BaseModel):
     reasoning_summary: str = Field(..., description="1-2 sentence executive summary of why this fits or does not fit.")
     upskill_recommendation: str = Field(..., description="One concrete weekend action to bridge the most critical skill gap.")
 
+    @model_validator(mode="after")
+    def deduplicate_skill_lists(self) -> "SkillsRubricOutput":
+        seen_core = {}
+        for s in self.missing_core_skills:
+            key = s.strip().lower()
+            if key and key not in seen_core:
+                seen_core[key] = s.strip()
+        self.missing_core_skills = list(seen_core.values())
+
+        seen_secondary = {}
+        for s in self.missing_secondary_skills:
+            key = s.strip().lower()
+            if key and key not in seen_core and key not in seen_secondary:
+                seen_secondary[key] = s.strip()
+        self.missing_secondary_skills = list(seen_secondary.values())
+        return self
+
     @property
     def computed_score(self) -> int:
         if self.hard_dealbreaker_found:
@@ -33,6 +51,14 @@ class SkillsRubricOutput(BaseModel):
         base = 85 + self.project_relevance_bonus
         penalty = (len(self.missing_core_skills) * 10) + (len(self.missing_secondary_skills) * 3)
         return max(0, min(100, base - penalty))
+
+
+class AuditOutput(BaseModel):
+    audit_passed: bool = False
+    hard_dealbreaker: bool = False
+    critical_flaw_found: bool = False
+    reason: str = ""
+    penalty_points: int = Field(default=0, ge=0, le=15)
 
 class MatchResult(BaseModel):
     chain_of_thought: str = Field(..., description="Step-by-step reasoning evaluating technical skills and projects.")

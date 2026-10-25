@@ -1,5 +1,6 @@
 from jobspy import scrape_jobs
 from app.models.schemas import JobPosting
+from app.core.database import compute_fingerprint
 import logging
 import re
 import socket
@@ -52,12 +53,21 @@ def fetch_daily_jobs(
     # eliminate duplicates based on job title and company
     jobs_df = jobs_df.drop_duplicates(subset=['title', 'company'])
     
+    seen_fingerprints = set()
     job_postings = []
     for _, row in jobs_df.iterrows():
         # ensure we have the minimum viable data
         if pd.isna(row.get('description')) or not str(row.get('description')).strip() or str(row.get('description')).lower() == 'nan':
             continue
             
+        title_str = str(row['title'])
+        company_str = str(row.get('company', 'Unknown'))
+        fp = compute_fingerprint(company_str, title_str)
+        if fp and fp in seen_fingerprints:
+            continue
+        if fp:
+            seen_fingerprints.add(fp)
+
         raw_desc = str(row['description'])
         
         # Token optimization: Strip only trailing HR boilerplate if it occurs in the bottom half of the JD
@@ -86,6 +96,7 @@ def fetch_daily_jobs(
             title=str(row['title']),
             company=str(row.get('company', 'Unknown')),
             description=cleaned_desc,
+            raw_description=raw_desc[:12000],
             url=str(row.get('job_url', ''))
         ))
         

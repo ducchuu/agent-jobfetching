@@ -6,13 +6,34 @@ on:
       - main
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run offline unit test suite
+        run: |
+          pytest
+
   deploy:
-    runs-on: self-hosted #because I deploy it on my home server, which I connected in GitHub actions
+    needs: test
+    runs-on: self-hosted
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
+
       - name: Create .env file
         run: |
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
@@ -23,11 +44,17 @@ jobs:
           echo "DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}" >> .env
           echo "MATCH_THRESHOLD=${{ secrets.MATCH_THRESHOLD }}" >> .env
           echo "CLOUDFLARE_TUNNEL_TOKEN=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" >> .env
+          echo "API_SECRET_KEY=${{ secrets.API_SECRET_KEY }}" >> .env
 
       - name: Build and Start Docker Containers
         run: |
-          docker-compose down
-          docker-compose up -d --build
+          docker compose build api
+          docker compose --profile tunnel up -d
+
+      - name: Verify Service Health
+        run: |
+          sleep 5
+          docker exec job_fetching_agent_api curl --fail-with-body --silent http://localhost:8000/
 
       - name: Clean up old Docker images
         run: docker image prune -f

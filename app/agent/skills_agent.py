@@ -84,7 +84,6 @@ acompletion = router.acompletion
 
 async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) -> MatchResult:
     candidate_data = {
-        "name": candidate_profile.name,
         "academic_level": candidate_profile.academic_level,
         "skills": candidate_profile.skills,
         "languages": candidate_profile.languages,
@@ -141,15 +140,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         )
     except (json.JSONDecodeError, KeyError, ValueError) as parse_err:
         logger.error(f"Failed to parse SkillsRubricOutput for job {job.id}: {parse_err}")
-        return MatchResult(
-            chain_of_thought=f"Parse failure: {parse_err}",
-            score=0,
-            reasoning="Failed to parse structured rubric from model response.",
-            missing_skills=[],
-            upskill_action="",
-            auto_reject=True,
-            is_skills_evaluated=True
-        )
+        raise EvaluationTransientError(f"Malformed skills rubric response: {parse_err}") from parse_err
     except EvaluationTransientError:
         raise
     except Exception as e:

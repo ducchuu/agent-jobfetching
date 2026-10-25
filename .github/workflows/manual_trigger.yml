@@ -1,7 +1,7 @@
 name: Manual Pipeline Trigger
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   trigger-pipeline:
@@ -9,4 +9,14 @@ jobs:
 
     steps:
       - name: Trigger AI Pipeline
-        run: docker exec job_fetching_agent_api curl -X POST http://localhost:8000/trigger-pipeline
+        run: |
+          docker exec job_fetching_agent_api sh -c '
+            if [ -n "$API_SECRET_KEY" ]; then
+              curl --fail-with-body --silent --show-error \
+                -X POST http://localhost:8000/trigger-pipeline \
+                -H "X-API-Key: $API_SECRET_KEY"
+            else
+              curl --fail-with-body --silent --show-error \
+                -X POST http://localhost:8000/trigger-pipeline
+            fi
+          '

@@ -5,7 +5,7 @@ import re
 from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, END
 from app.config import settings
-from app.models.schemas import JobPosting, CandidateProfile, MatchResult
+from app.models.schemas import JobPosting, CandidateProfile, MatchResult, AuditOutput
 from app.agent.language_agent import evaluate_language
 from app.agent.experience_agent import evaluate_experience
 from app.agent.skills_agent import evaluate_skills
@@ -96,7 +96,7 @@ EVALUATED JOB:
 Title: {state["job"].title}
 Company: {state["job"].company}
 Description:
-{state["job"].description}
+{state["job"].raw_description or state["job"].description}
 
 PREVIOUS EVALUATION:
 Score: {match_result.score}/100
@@ -121,20 +121,19 @@ Missing Skills identified: {', '.join(match_result.missing_skills)}
         match = re.search(r"\{[\s\S]*\}", content)
         if match:
             content = match.group(0)
-        data = json.loads(content)
+        audit = AuditOutput.model_validate_json(content)
         
-        if data.get("hard_dealbreaker"):
-            flaw_reason = data.get("reason", "Hard dealbreaker identified during audit.")
+        if audit.hard_dealbreaker:
+            flaw_reason = audit.reason or "Hard dealbreaker identified during audit."
             match_result.score = 0
             match_result.auto_reject = True
             match_result.reasoning = f"{match_result.reasoning} | [Auditor REJECT]: {flaw_reason}"
             return {"final_match_result": match_result}
 
-        if data.get("critical_flaw_found"):
-            raw_penalty = int(data.get("penalty_points", 10))
-            penalty = max(0, min(15, raw_penalty))
+        if audit.critical_flaw_found:
+            penalty = audit.penalty_points if audit.penalty_points > 0 else 10
             match_result.score = max(0, match_result.score - penalty)
-            flaw_reason = data.get("reason", "Audit identified discrepancies in skill match.")
+            flaw_reason = audit.reason or "Audit identified discrepancies in skill match."
             match_result.reasoning = f"{match_result.reasoning} | [Auditor -{penalty}pts]: {flaw_reason}"
             return {"final_match_result": match_result}
     except Exception as e:

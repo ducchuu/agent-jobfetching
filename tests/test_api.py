@@ -41,3 +41,14 @@ def test_profile_api_key_protection(mock_exists):
     # With valid header -> passes authentication (returns status ok or error when no file)
     resp = client.get("/profile", headers={"X-API-Key": "secret-key-123"})
     assert resp.status_code == 200
+
+@patch('app.config.settings.API_SECRET_KEY', "secret-key-123")
+@patch('app.main.settings.API_SECRET_KEY', "secret-key-123")
+def test_upload_cv_api_key_protection():
+    # Without header -> 403 Forbidden
+    resp = client.post("/upload-cv", files={"file": ("cv.pdf", b"%PDF-1.4...", "application/pdf")})
+    assert resp.status_code == 403
+
+    # With invalid header -> 403 Forbidden
+    resp = client.post("/upload-cv", headers={"X-API-Key": "wrong-key"}, files={"file": ("cv.pdf", b"%PDF-1.4...", "application/pdf")})
+    assert resp.status_code == 403

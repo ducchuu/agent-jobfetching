@@ -6,7 +6,7 @@ services:
     container_name: job_fetching_agent_api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     volumes:
@@ -16,6 +16,8 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflare_tunnel
     restart: unless-stopped
+    profiles:
+      - tunnel
     command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - api

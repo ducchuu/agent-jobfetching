@@ -69,3 +69,21 @@ def test_transient_error_not_marked_processed():
     
     # Because it is a transient error, it must remain eligible for retry
     assert not is_job_processed(job_id, company="StartupX", title="AI Engineer")
+
+@patch('app.core.database.DB_PATH', TEST_DB)
+def test_get_today_evaluated_count():
+    from app.core.database import record_job_status, get_today_evaluated_count, STATUS_EVALUATED, STATUS_FILTERED_LANG
+    
+    assert get_today_evaluated_count() == 0
+    
+    # Record one evaluated job
+    record_job_status(job_id="job_1", status=STATUS_EVALUATED)
+    assert get_today_evaluated_count() == 1
+    
+    # Record a filtered job (should not count as EVALUATED)
+    record_job_status(job_id="job_2", status=STATUS_FILTERED_LANG)
+    assert get_today_evaluated_count() == 1
+    
+    # Record another evaluated job
+    record_job_status(job_id="job_3", status=STATUS_EVALUATED)
+    assert get_today_evaluated_count() == 2

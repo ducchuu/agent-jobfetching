@@ -117,3 +117,11 @@ def record_job_status(
 
 def mark_job_processed(job_id: str):
     record_job_status(job_id=job_id, status=STATUS_EVALUATED)
+
+def get_today_evaluated_count() -> int:
+    conn = sqlite3.connect(DB_PATH, timeout=5.0)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM processed_jobs WHERE status = 'EVALUATED' AND DATE(updated_at) = DATE('now')")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count

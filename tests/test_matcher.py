@@ -143,3 +143,53 @@ async def test_evaluate_job_devils_advocate_hard_dealbreaker(mock_skills, mock_e
     assert result.score == 0
     assert result.auto_reject is True
     assert "Auditor REJECT" in result.reasoning
+
+@pytest.mark.asyncio
+@patch('app.agent.matcher.router.acompletion')
+@patch('app.agent.matcher.evaluate_language')
+@patch('app.agent.matcher.evaluate_experience')
+@patch('app.agent.matcher.evaluate_skills')
+async def test_devils_advocate_consumes_raw_description_with_stripped_requirement(
+    mock_skills, mock_exp, mock_lang, mock_router
+):
+    # Job has cleaned description missing trailing text, but raw_description preserves it
+    job_with_raw = JobPosting(
+        id="raw_test_1",
+        title="AI Systems Engineer",
+        company="DefenseTech",
+        description="Core duties: Develop deep learning models in Python.",  # Sliced text
+        raw_description="Core duties: Develop deep learning models in Python.\nBenefits & Perks: Mandatory active NATO Secret Clearance required.",  # Preserved unstripped text
+        url="http://example.com"
+    )
+    
+    mock_lang.return_value = LanguageFilterResult(is_rejected=False, reason="")
+    mock_exp.return_value = ExperienceFilterResult(is_rejected=False, reason="")
+    mock_skills.return_value = MatchResult(
+        chain_of_thought="Matches AI and Python.",
+        score=92,
+        reasoning="Strong technical alignment.",
+        missing_skills=[],
+        upskill_action="None",
+        auto_reject=False,
+        is_skills_evaluated=True
+    )
+    mock_router.return_value = MockResponse(
+        '{"audit_passed": false, "hard_dealbreaker": true, "critical_flaw_found": false, '
+        '"reason": "NATO Secret Clearance dealbreaker found in unstripped description", "penalty_points": 0}'
+    )
+    
+    result = await evaluate_job(mock_cv, job_with_raw)
+    
+    # Assert Devil's Advocate was called
+    mock_router.assert_called_once()
+    
+    # Verify the user prompt passed to the auditor actually contains the unstripped text from raw_description
+    call_args = mock_router.call_args
+    user_prompt = call_args.kwargs["messages"][1]["content"]
+    assert "Mandatory active NATO Secret Clearance required." in user_prompt
+    assert "Benefits & Perks:" in user_prompt
+    
+    # Verify the hard dealbreaker in raw_description resulted in reject
+    assert result.score == 0
+    assert result.auto_reject is True
+    assert "NATO Secret Clearance dealbreaker" in result.reasoning

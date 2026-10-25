@@ -65,5 +65,45 @@ def test_fetch_daily_jobs_safe_boilerplate_slicing(mock_scrape_jobs):
     # Check that "About the Company" at start was NOT sliced
     assert "About the Company" in jobs[0].description
     assert "Requirements:" in jobs[0].description
-    # Check that trailing boilerplate was sliced
+    # Check that trailing boilerplate was sliced from description but retained in raw_description
     assert "Free lunch" not in jobs[0].description
+    assert "Free lunch" in jobs[0].raw_description
+
+@patch('app.services.scraper.scrape_jobs')
+def test_fetch_daily_jobs_boilerplate_before_55_percent_not_sliced(mock_scrape_jobs):
+    # If "Why join us" or "What we offer" appears in the first half of the JD, it should NOT be trimmed
+    early_boilerplate_desc = (
+        "Why join us: We are leading AI innovation.\n"
+        "Requirements:\n" + ("Extensive distributed systems and Python experience. " * 30)
+    )
+    df = pd.DataFrame({
+        'id': ['safe_early'],
+        'title': ['Staff AI Engineer'],
+        'company': ['RoboTech'],
+        'description': [early_boilerplate_desc],
+        'job_url': ['https://example.com/job']
+    })
+    mock_scrape_jobs.return_value = df
+    
+    jobs = fetch_daily_jobs(target_job_titles=["Staff AI Engineer"])
+    assert len(jobs) == 1
+    # The early heading and downstream requirements must be preserved
+    assert "Why join us" in jobs[0].description
+    assert "Extensive distributed systems" in jobs[0].description
+
+@patch('app.services.scraper.scrape_jobs')
+def test_fetch_daily_jobs_fingerprint_deduplication(mock_scrape_jobs):
+    # Two listings with different casing/punctuation that Pandas drop_duplicates would miss
+    df = pd.DataFrame({
+        'id': ['job_1', 'job_2'],
+        'title': ['AI Engineer - NLP', 'ai engineer nlp'],
+        'company': ['TechCorp Inc.', 'techcorp inc'],
+        'description': ['Description 1', 'Description 2'],
+        'job_url': ['https://example.com/1', 'https://example.com/2']
+    })
+    mock_scrape_jobs.return_value = df
+    
+    jobs = fetch_daily_jobs(target_job_titles=["AI Engineer"])
+    # Fingerprint deduplication at scrape time should keep only 1 posting
+    assert len(jobs) == 1
+    assert jobs[0].raw_description == "Description 1"
