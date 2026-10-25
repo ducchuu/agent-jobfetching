@@ -24,6 +24,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run offline unit test suite
+        env:
+          OPENAI_API_KEY: "mock-openai-key"
+          ANTHROPIC_API_KEY: "mock-anthropic-key"
+          DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/mock"
         run: |
           pytest
 
