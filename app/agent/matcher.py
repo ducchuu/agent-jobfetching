@@ -30,7 +30,7 @@ INTERNSHIP_TITLE_PATTERNS = [
     r"\bworking\s+student\b",
     r"\bstudent\s+(worker|assistant|developer|engineer|researcher)\b",
     # Dutch
-    r"\b(afstudeerstage|meeloopstage|afstudeeropdracht|afstudeerder|afstudeerders)\b",
+    r"\b(afstudeerstage|meeloopstage|afstudeeropdracht|afstudeerder|afstudeerders|stageopdracht|stageplek|stageplaats|afstudeerplaats)\b",
     r"\b(stagiair|stagiaire|stagiaires)\b",
     r"\bstage\b",
     r"\bwerkstudent(en)?\b",

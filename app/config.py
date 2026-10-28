@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     LOCATIONS: List[str] = Field(default_factory=lambda: list(DEFAULT_LOCATIONS))
     MAX_RESULTS_PER_LOCATION: int = 1000
     SCRAPE_BATCH_SIZE: int = 25
+    SCRAPE_DELAY_SECONDS: int = 5
+    EVAL_BATCH_SIZE: int = 10
     TARGET_SKILLS_EVALUATIONS: Optional[int] = None
 
     @field_validator("LOCATIONS", mode="before")

@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 AMSTERDAM_TZ = ZoneInfo("Europe/Amsterdam")
 scheduler = AsyncIOScheduler(timezone=AMSTERDAM_TZ)
 pipeline_lock = asyncio.Lock()
+stop_pipeline_event = asyncio.Event()
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -76,11 +77,14 @@ async def run_job_matching_pipeline():
         return
 
     async with pipeline_lock:
+        stop_pipeline_event.clear()
         start_time = datetime.now(timezone.utc)
         today_date_str = get_today_date_str()
         locations = settings.LOCATIONS
         max_results_per_loc = settings.MAX_RESULTS_PER_LOCATION
         scrape_batch_size = settings.SCRAPE_BATCH_SIZE
+        scrape_delay = settings.SCRAPE_DELAY_SECONDS
+        eval_batch_size = settings.EVAL_BATCH_SIZE
         max_empty_retries = 3
 
         pipeline_status["state"] = "running"
@@ -197,45 +201,53 @@ async def run_job_matching_pipeline():
                     )
                     return False
 
-            for loc_idx, loc in enumerate(locations):
-                if aborted_message:
+            consecutive_empty = {loc: 0 for loc in locations}
+
+            while not aborted_message:
+                if stop_pipeline_event.is_set():
+                    aborted_message = "Stopped manually via /stop-pipeline."
+                    logger.info("Stop requested via /stop-pipeline. Halting pipeline...")
                     break
                 if settings.TARGET_SKILLS_EVALUATIONS and skills_evaluated_count >= settings.TARGET_SKILLS_EVALUATIONS:
                     logger.info(f"Reached overall target of {settings.TARGET_SKILLS_EVALUATIONS} skills evaluations. Stopping.")
                     break
 
-                pipeline_status["current_location"] = loc
-                loc_stats = get_location_daily_stats(loc, today_date_str)
-                results_fetched_today = loc_stats["results_fetched"]
-                offset = loc_stats["last_offset"]
-                
-                if loc_stats["is_exhausted"]:
-                    logger.info(f"Location '{loc}' already exhausted/completed today ({results_fetched_today} results fetched). Skipping.")
-                    continue
+                # Determine active locations that have not completed or exhausted for today
+                active_locations = []
+                for loc in locations:
+                    loc_stats = get_location_daily_stats(loc, today_date_str)
+                    if loc_stats["is_exhausted"]:
+                        continue
+                    if loc_stats["last_offset"] >= max_results_per_loc or loc_stats["results_fetched"] >= max_results_per_loc:
+                        mark_location_daily_exhausted(loc, today_date_str)
+                        continue
+                    active_locations.append(loc)
 
-                if offset >= max_results_per_loc or results_fetched_today >= max_results_per_loc:
-                    logger.info(
-                        f"Location '{loc}' already reached limit of {max_results_per_loc} results today "
-                        f"(offset: {offset}, fetched: {results_fetched_today}). Skipping."
-                    )
-                    mark_location_daily_exhausted(loc, today_date_str)
-                    continue
+                if not active_locations:
+                    logger.info("All configured locations have completed or exhausted listings for today.")
+                    break
 
-                logger.info(
-                    f"--- Processing Location [{loc_idx + 1}/{len(locations)}]: {loc} "
-                    f"(starting offset: {offset}, fetched today: {results_fetched_today}/{max_results_per_loc}) ---"
-                )
+                logger.info(f"=== Starting round-robin cycle across {len(active_locations)} active locations: {active_locations} ===")
 
-                consecutive_empty_batches = 0
-
-                while offset < max_results_per_loc and results_fetched_today < max_results_per_loc:
-                    if aborted_message:
+                for loc in active_locations:
+                    if aborted_message or stop_pipeline_event.is_set():
+                        if stop_pipeline_event.is_set() and not aborted_message:
+                            aborted_message = "Stopped manually via /stop-pipeline."
                         break
                     if settings.TARGET_SKILLS_EVALUATIONS and skills_evaluated_count >= settings.TARGET_SKILLS_EVALUATIONS:
                         break
 
+                    pipeline_status["current_location"] = loc
+                    loc_stats = get_location_daily_stats(loc, today_date_str)
+                    results_fetched_today = loc_stats["results_fetched"]
+                    offset = loc_stats["last_offset"]
+
+                    if offset >= max_results_per_loc or results_fetched_today >= max_results_per_loc:
+                        mark_location_daily_exhausted(loc, today_date_str)
+                        continue
+
                     current_batch_wanted = min(scrape_batch_size, max_results_per_loc - offset)
-                    logger.info(f"Fetching {current_batch_wanted} jobs for {loc} (offset: {offset})...")
+                    logger.info(f"[{loc}] Fetching {current_batch_wanted} jobs (offset: {offset}, today: {results_fetched_today}/{max_results_per_loc})...")
                     try:
                         jobs = await asyncio.to_thread(
                             fetch_daily_jobs,
@@ -246,7 +258,6 @@ async def run_job_matching_pipeline():
                             offset=offset
                         )
                     except NetworkError as e:
-                        # breaks the pipeline so that API calls are not wasted from JobSpy and triggers the network error message to discord
                         err_msg = str(e)
                         logger.error(f"Network failure detected (not a 429). Aborting pipeline. Details: {err_msg}")
                         await send_discord_infra_alert(
@@ -259,23 +270,21 @@ async def run_job_matching_pipeline():
                         break
 
                     if not jobs:
-                        consecutive_empty_batches += 1
-                        if consecutive_empty_batches <= max_empty_retries:
-                            backoff_seconds = 60 * consecutive_empty_batches
+                        consecutive_empty[loc] += 1
+                        if consecutive_empty[loc] <= max_empty_retries:
                             logger.warning(
-                                f"No jobs returned at offset {offset} for {loc} (possible LinkedIn 429 rate limit or temporary cooldown). "
-                                f"Waiting {backoff_seconds}s for rate-limit reset before retry {consecutive_empty_batches}/{max_empty_retries}..."
+                                f"[{loc}] No jobs returned at offset {offset} (attempt {consecutive_empty[loc]}/{max_empty_retries}). "
+                                f"Will retry in next round-robin cycle..."
                             )
-                            await asyncio.sleep(backoff_seconds)
-                            continue
                         else:
                             logger.info(
-                                f"No more jobs found for location {loc} at offset {offset} after {max_empty_retries} retries."
+                                f"[{loc}] No more jobs found at offset {offset} after {max_empty_retries} retries. Marking exhausted for today."
                             )
                             mark_location_daily_exhausted(loc, today_date_str)
-                            break
+                        await asyncio.sleep(scrape_delay)
+                        continue
 
-                    consecutive_empty_batches = 0
+                    consecutive_empty[loc] = 0
                     results_fetched_today += len(jobs)
                     offset += scrape_batch_size
 
@@ -289,9 +298,8 @@ async def run_job_matching_pipeline():
                     )
                     pipeline_status["location_stats"] = get_all_daily_location_stats(today_date_str)
 
-                    logger.info(f"Scraper returned {len(jobs)} jobs for {loc}. Total fetched for {loc} today: {results_fetched_today}. Evaluating...")
+                    logger.info(f"[{loc}] Scraper returned {len(jobs)} jobs (total today: {results_fetched_today}). Evaluating...")
 
-                    eval_batch_size = 5
                     for i in range(0, len(jobs), eval_batch_size):
                         if settings.TARGET_SKILLS_EVALUATIONS and skills_evaluated_count >= settings.TARGET_SKILLS_EVALUATIONS:
                             logger.info(f"Reached overall target of {settings.TARGET_SKILLS_EVALUATIONS} skills evaluations. Stopping.")
@@ -305,18 +313,10 @@ async def run_job_matching_pipeline():
                         logger.info(f"Progress: {skills_evaluated_count} skills evaluated so far across all locations.")
 
                     if is_loc_now_exhausted:
-                        logger.info(f"Reached maximum results limit ({max_results_per_loc}) for location {loc}. Moving to next location.")
-                        break
+                        logger.info(f"[{loc}] Reached maximum results limit ({max_results_per_loc}) for today.")
 
-                    logger.info("Pausing 25 seconds before fetching next scraper batch to prevent rate limiting (LinkedIn 429)...")
-                    await asyncio.sleep(25)
-
-                logger.info(f"Finished processing location: {loc} (total fetched today: {results_fetched_today}).")
-
-                # Pause between switching to next location if there are more locations and not aborted
-                if loc_idx < len(locations) - 1 and not aborted_message:
-                    logger.info("Pausing 25 seconds before switching to next location to prevent rate limiting...")
-                    await asyncio.sleep(25)
+                    logger.info(f"Pausing {scrape_delay}s before next location in cycle...")
+                    await asyncio.sleep(scrape_delay)
 
         except Exception as e:
             logger.exception(f"Unexpected error in job matching pipeline: {e}")
@@ -382,6 +382,13 @@ async def trigger_pipeline(background_tasks: BackgroundTasks):
         return {"status": "busy", "message": "Pipeline is already currently running."}
     background_tasks.add_task(run_job_matching_pipeline)
     return {"message": "Pipeline triggered in the background."}
+
+@app.post("/stop-pipeline", dependencies=[Depends(verify_api_key)])
+async def stop_pipeline():
+    if not pipeline_lock.locked():
+        return {"status": "idle", "message": "Pipeline is not currently running."}
+    stop_pipeline_event.set()
+    return {"status": "stopping", "message": "Stop signal sent. Pipeline will halt after the current batch finishes."}
 
 @app.get("/pipeline-status")
 async def get_pipeline_status():
