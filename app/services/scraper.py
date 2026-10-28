@@ -4,8 +4,42 @@ from app.core.database import compute_fingerprint
 import logging
 import re
 import socket
+from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+COUNTRY_CITY_MAP = {
+    # Spain
+    "spain": "Spain",
+    "barcelona": "Spain",
+    "madrid": "Spain",
+    "valencia": "Spain",
+    "seville": "Spain",
+    "sevilla": "Spain",
+    "malaga": "Spain",
+    "bilbao": "Spain",
+    # Netherlands
+    "netherlands": "Netherlands",
+    "nederland": "Netherlands",
+    "amsterdam": "Netherlands",
+    "utrecht": "Netherlands",
+    "rotterdam": "Netherlands",
+    "delft": "Netherlands",
+    "eindhoven": "Netherlands",
+    "the hague": "Netherlands",
+    "den haag": "Netherlands",
+    "groningen": "Netherlands",
+    "leiden": "Netherlands",
+}
+
+def resolve_country_indeed(location: str) -> str:
+    loc_clean = location.strip().lower()
+    if loc_clean in COUNTRY_CITY_MAP:
+        return COUNTRY_CITY_MAP[loc_clean]
+    for key, country in COUNTRY_CITY_MAP.items():
+        if re.search(rf"\b{re.escape(key)}\b", loc_clean):
+            return country
+    return location
 
 class NetworkError(Exception):
     # for raising error when a DNS or TCP connectivity failure 
@@ -16,12 +50,14 @@ def fetch_daily_jobs(
     location: str = "Netherlands",
     job_type: str = "fulltime", # here can be "fulltime", "internship", "parttime"
     results_wanted: int = 25,
-    offset: int = 0
+    offset: int = 0,
+    country_indeed: Optional[str] = None
 ) -> list[JobPosting]:
     
     logger.info(f"Scraping jobs for dynamic titles: {target_job_titles} (offset: {offset})")
     
     search_query = " OR ".join([f'"{title}"' for title in target_job_titles])
+    effective_country_indeed = country_indeed or resolve_country_indeed(location)
     
     try:
         # scrape across only LinkedIn and Indeed, because JobSpy API doesn't support magnet.me 
@@ -32,8 +68,8 @@ def fetch_daily_jobs(
             job_type=job_type,
             results_wanted=results_wanted,
             offset=offset,
-            hours_old=168, # only jobs posted in the last 7 days
-            country_indeed='Netherlands',
+            hours_old=72, # only jobs posted in the last 3 days
+            country_indeed=effective_country_indeed,
             linkedin_fetch_description=True # this is an jobspy api restriction that forces LinkedIn to fetch descriptions to avoid nan
         )
     except Exception as e:
@@ -97,7 +133,8 @@ def fetch_daily_jobs(
             company=str(row.get('company', 'Unknown')),
             description=cleaned_desc,
             raw_description=raw_desc[:12000],
-            url=str(row.get('job_url', ''))
+            url=str(row.get('job_url', '')),
+            location=str(row.get('location', location) or location)
         ))
         
     logger.info(f"JobSpy fetched {len(jobs_df)} raw jobs. Processed into {len(job_postings)} valid postings with descriptions.")

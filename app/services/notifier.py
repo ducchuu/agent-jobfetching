@@ -25,17 +25,23 @@ async def send_discord_infra_alert(title: str, description: str):
 async def send_discord_alert(job: JobPosting, match: MatchResult):
     color = 0x00FF00 if match.score >= 90 else 0xFFA500 # green for >= 90, orange for <80,90)
 
+    fields = [
+        {"name": "Reasoning", "value": match.reasoning, "inline": False},
+    ]
+    if getattr(job, "location", None):
+        fields.append({"name": "Location", "value": job.location, "inline": True})
+    fields.extend([
+        {"name": "Missing Skills", "value": ", ".join(match.missing_skills) or "None", "inline": True},
+        {"name": "Upskill Action", "value": match.upskill_action, "inline": False}
+    ])
+
     payload = {
         "username": "Job Fetching Agent",
         "embeds": [{
             "title": f"[{match.score}/100] {job.title} @ {job.company}",
             "url": job.url,
             "color": color,
-            "fields": [
-                {"name": "Reasoning", "value": match.reasoning, "inline": False},
-                {"name": "Missing Skills", "value": ", ".join(match.missing_skills) or "None", "inline": True},
-                {"name": "Upskill Action", "value": match.upskill_action, "inline": False}
-            ]
+            "fields": fields
         }]
     }
     

@@ -87,3 +87,62 @@ def test_get_today_evaluated_count():
     # Record another evaluated job
     record_job_status(job_id="job_3", status=STATUS_EVALUATED)
     assert get_today_evaluated_count() == 2
+
+@patch('app.core.database.DB_PATH', TEST_DB)
+def test_location_scrape_tracking():
+    from app.core.database import (
+        get_location_daily_stats,
+        record_location_daily_scrape,
+        mark_location_daily_exhausted,
+        get_all_daily_location_stats,
+        reset_daily_location_stats
+    )
+    
+    date_str = "2026-10-28"
+    
+    # Fresh location starts with 0
+    stats = get_location_daily_stats("Amsterdam", date_str=date_str)
+    assert stats["results_fetched"] == 0
+    assert stats["last_offset"] == 0
+    assert stats["is_exhausted"] is False
+    
+    # Record first batch of 25 jobs at offset 25
+    record_location_daily_scrape("Amsterdam", results_fetched=25, offset=25, is_exhausted=False, date_str=date_str)
+    stats = get_location_daily_stats("Amsterdam", date_str=date_str)
+    assert stats["results_fetched"] == 25
+    assert stats["last_offset"] == 25
+    assert stats["is_exhausted"] is False
+    
+    # Record second batch
+    record_location_daily_scrape("Amsterdam", results_fetched=50, offset=50, is_exhausted=False, date_str=date_str)
+    stats = get_location_daily_stats("Amsterdam", date_str=date_str)
+    assert stats["results_fetched"] == 50
+    assert stats["last_offset"] == 50
+    assert stats["is_exhausted"] is False
+    
+    # Mark exhausted
+    mark_location_daily_exhausted("Amsterdam", date_str=date_str)
+    stats = get_location_daily_stats("Amsterdam", date_str=date_str)
+    assert stats["is_exhausted"] is True
+    
+    # Add another location
+    record_location_daily_scrape("Madrid", results_fetched=25, offset=25, is_exhausted=False, date_str=date_str)
+    
+    all_stats = get_all_daily_location_stats(date_str=date_str)
+    assert "Amsterdam" in all_stats
+    assert "Madrid" in all_stats
+    assert all_stats["Amsterdam"]["results_fetched"] == 50
+    assert all_stats["Amsterdam"]["is_exhausted"] is True
+    assert all_stats["Madrid"]["results_fetched"] == 25
+    assert all_stats["Madrid"]["is_exhausted"] is False
+    
+    # Date isolation: next day should be fresh
+    tomorrow_stats = get_location_daily_stats("Amsterdam", date_str="2026-10-29")
+    assert tomorrow_stats["results_fetched"] == 0
+    assert tomorrow_stats["last_offset"] == 0
+    assert tomorrow_stats["is_exhausted"] is False
+    
+    # Reset
+    reset_daily_location_stats(date_str=date_str)
+    cleared_stats = get_all_daily_location_stats(date_str=date_str)
+    assert len(cleared_stats) == 0

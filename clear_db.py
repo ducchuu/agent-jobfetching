@@ -17,9 +17,10 @@ def main():
         count = cursor.fetchone()[0]
         
         cursor.execute("DELETE FROM processed_jobs")
+        cursor.execute("DELETE FROM location_scrape_tracking")
         conn.commit()
         
-        print(f"Successfully cleared {count} jobs from the database!")
+        print(f"Successfully cleared {count} jobs and daily location tracking from the database!")
         print("The pipeline will now analyze all jobs again as if they were brand new.")
         
     except sqlite3.OperationalError as e:

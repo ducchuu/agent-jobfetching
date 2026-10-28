@@ -8,6 +8,7 @@ class JobPosting(BaseModel):
     description: str
     url: str
     raw_description: str = ""
+    location: str = ""
 
 class LanguageFilterResult(BaseModel):
     is_rejected: bool = Field(..., description="True if the job is written in a language the candidate doesn't speak, or requires a language they don't have.")

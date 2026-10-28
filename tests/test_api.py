@@ -52,3 +52,19 @@ def test_upload_cv_api_key_protection():
     # With invalid header -> 403 Forbidden
     resp = client.post("/upload-cv", headers={"X-API-Key": "wrong-key"}, files={"file": ("cv.pdf", b"%PDF-1.4...", "application/pdf")})
     assert resp.status_code == 403
+
+@patch('app.config.settings.API_SECRET_KEY', "secret-key-123")
+@patch('app.main.settings.API_SECRET_KEY', "secret-key-123")
+def test_location_stats_api_key_protection():
+    # Without header -> 403 Forbidden
+    resp = client.get("/location-stats")
+    assert resp.status_code == 403
+
+    # With valid header -> 200 OK
+    resp = client.get("/location-stats", headers={"X-API-Key": "secret-key-123"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "date" in data
+    assert "configured_locations" in data
+    assert "Netherlands" in data["configured_locations"]
+    assert "Spain" in data["configured_locations"]

@@ -107,3 +107,29 @@ def test_fetch_daily_jobs_fingerprint_deduplication(mock_scrape_jobs):
     # Fingerprint deduplication at scrape time should keep only 1 posting
     assert len(jobs) == 1
     assert jobs[0].raw_description == "Description 1"
+
+def test_resolve_country_indeed():
+    from app.services.scraper import resolve_country_indeed
+    assert resolve_country_indeed("Netherlands") == "Netherlands"
+    assert resolve_country_indeed("Amsterdam") == "Netherlands"
+    assert resolve_country_indeed("Utrecht") == "Netherlands"
+    assert resolve_country_indeed("Rotterdam") == "Netherlands"
+    assert resolve_country_indeed("Delft") == "Netherlands"
+    assert resolve_country_indeed("Spain") == "Spain"
+    assert resolve_country_indeed("Barcelona") == "Spain"
+    assert resolve_country_indeed("Madrid") == "Spain"
+    assert resolve_country_indeed("CustomLand") == "CustomLand"
+
+@patch('app.services.scraper.scrape_jobs')
+def test_fetch_daily_jobs_passes_correct_country_indeed(mock_scrape_jobs):
+    mock_scrape_jobs.return_value = mock_df
+    
+    fetch_daily_jobs(target_job_titles=["AI Engineer"], location="Barcelona")
+    _, kwargs = mock_scrape_jobs.call_args
+    assert kwargs.get("country_indeed") == "Spain"
+    assert kwargs.get("location") == "Barcelona"
+
+    fetch_daily_jobs(target_job_titles=["AI Engineer"], location="Amsterdam")
+    _, kwargs = mock_scrape_jobs.call_args
+    assert kwargs.get("country_indeed") == "Netherlands"
+    assert kwargs.get("location") == "Amsterdam"
