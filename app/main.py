@@ -7,7 +7,7 @@ from app.core.database import (
     init_db, is_job_processed, record_job_status, mark_job_processed,
     get_today_date_str, get_location_daily_stats, record_location_daily_scrape,
     mark_location_daily_exhausted, get_all_daily_location_stats,
-    STATUS_FILTERED_BOT, STATUS_FILTERED_LANG, STATUS_FILTERED_EXP,
+    STATUS_FILTERED_BOT, STATUS_FILTERED_INTERN, STATUS_FILTERED_LANG, STATUS_FILTERED_EXP,
     STATUS_EVALUATED, STATUS_ERROR_TRANSIENT
 )
 from app.services.scraper import fetch_daily_jobs, NetworkError
@@ -142,6 +142,8 @@ async def run_job_matching_pipeline():
                         reason_lower = (match_result.reasoning or "").lower()
                         if "anti-bot" in reason_lower or "captcha" in reason_lower:
                             filter_status = STATUS_FILTERED_BOT
+                        elif "internship" in reason_lower or "intern" in reason_lower:
+                            filter_status = STATUS_FILTERED_INTERN
                         elif "language" in reason_lower:
                             filter_status = STATUS_FILTERED_LANG
                         elif "experience" in reason_lower:

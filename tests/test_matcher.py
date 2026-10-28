@@ -193,3 +193,84 @@ async def test_devils_advocate_consumes_raw_description_with_stripped_requiremen
     assert result.score == 0
     assert result.auto_reject is True
     assert "NATO Secret Clearance dealbreaker" in result.reasoning
+
+@pytest.mark.asyncio
+@patch('app.agent.matcher.evaluate_language')
+@patch('app.agent.matcher.evaluate_experience')
+@patch('app.agent.matcher.evaluate_skills')
+async def test_evaluate_job_fails_internship_title_without_llm_call(mock_skills, mock_exp, mock_lang):
+    intern_job = JobPosting(
+        id="intern_1",
+        title="Afstudeerstage Groen coderen: automatische check op duurzame software",
+        company="GreenTech",
+        description="Stage opdracht voor afstudeerders.",
+        url="http://example.com/intern"
+    )
+
+    result = await evaluate_job(mock_cv, intern_job)
+
+    assert result.auto_reject is True
+    assert result.score == 0
+    assert "Internship filter" in result.reasoning
+    # Ensure zero LLM calls were made
+    mock_lang.assert_not_called()
+    mock_exp.assert_not_called()
+    mock_skills.assert_not_called()
+
+@pytest.mark.asyncio
+@patch('app.agent.matcher.evaluate_language')
+@patch('app.agent.matcher.evaluate_experience')
+@patch('app.agent.matcher.evaluate_skills')
+async def test_evaluate_job_fails_internship_description_without_llm_call(mock_skills, mock_exp, mock_lang):
+    intern_desc_job = JobPosting(
+        id="intern_2",
+        title="AI Engineer",
+        company="StartupX",
+        description="This is an internship position. Must be currently enrolled as a student.",
+        url="http://example.com/intern2"
+    )
+
+    result = await evaluate_job(mock_cv, intern_desc_job)
+
+    assert result.auto_reject is True
+    assert result.score == 0
+    assert "Internship filter" in result.reasoning
+    mock_lang.assert_not_called()
+    mock_exp.assert_not_called()
+    mock_skills.assert_not_called()
+
+@pytest.mark.asyncio
+@patch('app.agent.matcher.router.acompletion')
+@patch('app.agent.matcher.evaluate_language')
+@patch('app.agent.matcher.evaluate_experience')
+@patch('app.agent.matcher.evaluate_skills')
+async def test_evaluate_job_early_stage_startup_not_rejected_as_internship(
+    mock_skills, mock_exp, mock_lang, mock_router
+):
+    startup_job = JobPosting(
+        id="startup_1",
+        title="Senior AI Engineer at Early Stage Startup",
+        company="VentureAI",
+        description="Leading deep learning pipeline development.",
+        url="http://example.com/startup"
+    )
+
+    mock_lang.return_value = LanguageFilterResult(is_rejected=False, reason="")
+    mock_exp.return_value = ExperienceFilterResult(is_rejected=False, reason="")
+    mock_router.return_value = MockResponse('{"audit_passed": true, "critical_flaw_found": false, "reason": "", "penalty_points": 0}')
+    mock_skills.return_value = MatchResult(
+        chain_of_thought="Matches tech stack",
+        score=90,
+        reasoning="Good fit",
+        missing_skills=[],
+        upskill_action="None",
+        auto_reject=False,
+        is_skills_evaluated=True
+    )
+
+    result = await evaluate_job(mock_cv, startup_job)
+
+    # Should not be rejected by internship filter
+    assert result.auto_reject is False
+    assert result.score == 90
+    mock_skills.assert_called_once()

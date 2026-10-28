@@ -21,6 +21,68 @@ class JobState(TypedDict):
     reject_reason: str
     final_match_result: Optional[MatchResult]
 
+# anti-bot, corrupted jobs, and internship filtering (regex-only, zero LLM cost)
+INTERNSHIP_TITLE_PATTERNS = [
+    # English
+    r"\b(intern|interns|internship|internships)\b",
+    r"\bco-?op\b",
+    r"\btrainee(ship)?s?\b",
+    r"\bworking\s+student\b",
+    r"\bstudent\s+(worker|assistant|developer|engineer|researcher)\b",
+    # Dutch
+    r"\b(afstudeerstage|meeloopstage|afstudeeropdracht|afstudeerder|afstudeerders)\b",
+    r"\b(stagiair|stagiaire|stagiaires)\b",
+    r"\bstage\b",
+    r"\bwerkstudent(en)?\b",
+    # Spanish
+    r"\b(beca|becas|becari[oa]s?)\b",
+    r"\bpr[áa]cticas?\b",
+    r"\bpasant[íi]as?\b",
+    r"\bpasantes?\b",
+]
+
+INTERNSHIP_DESC_PATTERNS = [
+    # English
+    r"\b(this\s+is\s+an?\s+(internship|co-?op|traineeship))\b",
+    r"\b(internship|traineeship)\s+(position|role|opportunity|program|assignment)\b",
+    r"\b(duration\s+of\s+the\s+internship|internship\s+duration)\b",
+    r"\b(must\s+be\s+currently\s+enrolled\s+(as\s+a\s+student|in\s+(a\s+)?(university|college|bachelor|master)))\b",
+    r"\b(you\s+must\s+be\s+a\s+registered\s+student|enrolled\s+students?\s+only)\b",
+    r"\b(graduation|thesis)\s+(internship|assignment|project)\b",
+    # Dutch
+    r"\b(dit\s+is\s+een\s+(afstudeer)?stage)\b",
+    r"\b(stageplek|stageplaats|afstudeerplaats|meeloopstage|afstudeerstage)\b",
+    r"\b(tijdens\s+je\s+stage|gedurende\s+de\s+stage)\b",
+    r"\b(je\s+bent\s+(momenteel\s+)?ingeschreven\s+bij\s+een\s+(hbo|wo|universiteit))\b",
+    r"\b(voor\s+deze\s+stage\s+moet\s+je\s+ingeschreven\s+staan)\b",
+    # Spanish
+    r"\b(convenio\s+de\s+colaboraci[óo]n\s+(con\s+la\s+universidad|universitario))\b",
+    r"\b(convenio\s+de\s+pr[áa]cticas)\b",
+    r"\b(estar\s+matriculad[oa]\s+en\s+(la\s+universidad|un\s+grado|un\s+m[áa]ster))\b",
+    r"\b(programa\s+de\s+becas?)\b",
+]
+
+def check_is_internship(title: str, description: str = "") -> tuple[bool, str]:
+    title_lower = title.lower()
+    for pattern in INTERNSHIP_TITLE_PATTERNS:
+        match = re.search(pattern, title_lower)
+        if match:
+            # Avoid false positives where "stage" refers to startup maturity or pipeline stages
+            if match.group(0).lower() == "stage":
+                if re.search(r"\b(early|seed|growth|late|multi|two)[-\s]+stage\b", title_lower):
+                    continue
+                if re.search(r"\bstage[-\s]+(startup|funding|round|company|investment)\b", title_lower):
+                    continue
+            return True, f"Title indicates internship/trainee/student role ('{match.group(0)}')"
+
+    desc_lower = description.lower()
+    for pattern in INTERNSHIP_DESC_PATTERNS:
+        match = re.search(pattern, desc_lower)
+        if match:
+            return True, f"Description indicates internship/student role ('{match.group(0)}')"
+
+    return False, ""
+
 # anti-bot and corrupted jobs scraping check
 async def scraper_validation_node(state: JobState):
     job = state["job"]
@@ -30,6 +92,12 @@ async def scraper_validation_node(state: JobState):
         if phrase in text and len(text) < 1500:
             logger.info(f"Scraper validation rejected job {job.id}: Anti-bot detected.")
             return {"is_rejected": True, "reject_reason": "Anti-bot/Scraper blocked text detected."}
+            
+    is_intern, intern_reason = check_is_internship(job.title, job.raw_description or job.description)
+    if is_intern:
+        logger.info(f"Internship filter rejected job {job.id} ({job.title}): {intern_reason}")
+        return {"is_rejected": True, "reject_reason": f"Internship filter: {intern_reason}"}
+
     return {"is_rejected": False, "reject_reason": ""}
 
 # concurrent experience and language filters in order to reduce latency
