@@ -246,6 +246,129 @@ async def test_pipeline_1000_limit_transitions_to_next_location(tmp_path):
         assert ams_stats["results_fetched"] == 1
         assert ams_stats["is_exhausted"] is True
 
+@pytest.mark.asyncio
+async def test_pipeline_stop_event_halts_evaluations(tmp_path):
+    from app.main import stop_pipeline_event
+    import sqlite3
+
+    test_db = str(tmp_path / "test_stop_event.db")
+    fake_profile_json = '''{
+        "name": "Test Candidate",
+        "academic_level": "BSc",
+        "skills": ["Python"],
+        "languages": ["English"],
+        "projects": [],
+        "experience_summary": "Test experience",
+        "target_job_titles": ["AI Engineer"]
+    }'''
+
+    # Generate 20 jobs
+    jobs_list = [
+        JobPosting(
+            id=f"job_{i}",
+            title=f"AI Engineer {i}",
+            company="CompanyX",
+            description="AI engineer description",
+            url=f"http://example.com/{i}",
+            location="Netherlands"
+        )
+        for i in range(20)
+    ]
+
+    eval_calls = 0
+
+    async def fake_evaluate_job(candidate, job, target_yoe=0):
+        nonlocal eval_calls
+        eval_calls += 1
+        # Set stop event during the first batch of evaluations
+        if eval_calls == 5:
+            stop_pipeline_event.set()
+        return MatchResult(
+            chain_of_thought="Good match",
+            score=70,
+            reasoning="Reasonable fit",
+            missing_skills=[],
+            upskill_action="None",
+            auto_reject=False,
+            is_skills_evaluated=True
+        )
+
+    with patch('app.core.database.DB_PATH', test_db), \
+         patch('app.main.settings.LOCATIONS', ["Netherlands"]), \
+         patch('app.main.settings.EVAL_BATCH_SIZE', 5), \
+         patch('app.main.check_network_connectivity', AsyncMock(return_value=True)), \
+         patch('app.main.os.path.exists', return_value=True), \
+         patch('builtins.open', MagicMock(return_value=MagicMock(__enter__=lambda s: MagicMock(read=lambda: fake_profile_json)))), \
+         patch('app.main.fetch_daily_jobs', return_value=jobs_list), \
+         patch('app.main.evaluate_job', side_effect=fake_evaluate_job), \
+         patch('app.main.send_discord_alert', AsyncMock()), \
+         patch('asyncio.sleep', AsyncMock()):
+
+        init_db()
+        stop_pipeline_event.clear()
+        await run_job_matching_pipeline()
+
+        # It should have evaluated batch 1 (5 jobs) and halted before processing remaining 15
+        assert eval_calls < 20
+        assert stop_pipeline_event.is_set()
+
+@pytest.mark.asyncio
+async def test_pipeline_status_classification_not_confused_by_internal_substring(tmp_path):
+    import sqlite3
+    test_db = str(tmp_path / "test_status_classification.db")
+    fake_profile_json = '''{
+        "name": "Test Candidate",
+        "academic_level": "BSc",
+        "skills": ["Python"],
+        "languages": ["English"],
+        "projects": [],
+        "experience_summary": "Test experience",
+        "target_job_titles": ["AI Engineer"]
+    }'''
+
+    sample_job = JobPosting(
+        id="job_internal_1",
+        title="Internal Tooling Engineer",
+        company="TechCorp",
+        description="Developing internal tooling and international deployment workflows.",
+        url="http://example.com/internal",
+        location="Netherlands"
+    )
+
+    # Job rejected by domain mismatch mentioning internal tooling
+    eval_result = MatchResult(
+        chain_of_thought="Domain mismatch",
+        score=0,
+        reasoning="Candidate lacks experience with internal enterprise developer platforms.",
+        missing_skills=["Internal Tooling"],
+        upskill_action="None",
+        auto_reject=True,
+        is_skills_evaluated=True
+    )
+
+    with patch('app.core.database.DB_PATH', test_db), \
+         patch('app.main.settings.LOCATIONS', ["Netherlands"]), \
+         patch('app.main.settings.MAX_RESULTS_PER_LOCATION', 25), \
+         patch('app.main.check_network_connectivity', AsyncMock(return_value=True)), \
+         patch('app.main.os.path.exists', return_value=True), \
+         patch('builtins.open', MagicMock(return_value=MagicMock(__enter__=lambda s: MagicMock(read=lambda: fake_profile_json)))), \
+         patch('app.main.fetch_daily_jobs', return_value=[sample_job]), \
+         patch('app.main.evaluate_job', AsyncMock(return_value=eval_result)), \
+         patch('asyncio.sleep', AsyncMock()):
+
+        init_db()
+        await run_job_matching_pipeline()
+
+        conn = sqlite3.connect(test_db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT status FROM processed_jobs WHERE id = ?", ("job_internal_1",))
+        row = cursor.fetchone()
+        conn.close()
+
+        # Should be EVALUATED, NOT FILTERED_INTERN
+        assert row is not None
+        assert row[0] == "EVALUATED"
+
 if __name__ == "__main__":
     import asyncio
     print("Running the exact matching pipeline...")

@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-DB_PATH = "data/jobs.db"
+DB_PATH = os.environ.get("DB_PATH", "data/jobs.db")
 
 def main():
     if not os.path.exists(DB_PATH):
@@ -17,7 +17,10 @@ def main():
         count = cursor.fetchone()[0]
         
         cursor.execute("DELETE FROM processed_jobs")
-        cursor.execute("DELETE FROM location_scrape_tracking")
+        try:
+            cursor.execute("DELETE FROM location_scrape_tracking")
+        except sqlite3.OperationalError:
+            pass  # Table might not exist yet on legacy schema
         conn.commit()
         
         print(f"Successfully cleared {count} jobs and daily location tracking from the database!")

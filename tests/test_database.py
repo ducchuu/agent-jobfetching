@@ -146,3 +146,26 @@ def test_location_scrape_tracking():
     reset_daily_location_stats(date_str=date_str)
     cleared_stats = get_all_daily_location_stats(date_str=date_str)
     assert len(cleared_stats) == 0
+
+def test_clear_db_resilient(tmp_path):
+    import clear_db
+    test_db = str(tmp_path / "legacy_jobs.db")
+    
+    # Create legacy DB without location_scrape_tracking table
+    conn = sqlite3.connect(test_db)
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE processed_jobs (id TEXT PRIMARY KEY);")
+    cursor.execute("INSERT INTO processed_jobs (id) VALUES ('job_legacy_1');")
+    conn.commit()
+    conn.close()
+
+    with patch('clear_db.DB_PATH', test_db):
+        clear_db.main()
+
+    conn = sqlite3.connect(test_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM processed_jobs;")
+    count = cursor.fetchone()[0]
+    conn.close()
+
+    assert count == 0

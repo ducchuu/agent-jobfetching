@@ -60,19 +60,19 @@ Mocked audit tests establish prompt contents and response handling. They do not 
 
 ## Concurrency and limits
 
-- Up to five postings are processed together.
-- Each posting runs two eligibility (experience and language) checks concurrently.
-- A run targets 25 completed skills evaluations (after experience and language filtering). The pipeline paginates through as many scraper batches as necessary (fetching 50, 100, or more raw postings) until 25 roles pass entry filters and receive skills evaluation. Because batches run in groups of up to five, a run that reaches the target completes at least 25 skills agent evaluations.
-- Exhausted listings or interruptions can produce fewer evaluations.
-- Early rejections and transient failures do not count; calls may nevertheless incur charges.
-- Manual requests reset the run counter. There is no cumulative daily evaluation/spending cap on purpose, as I do like to keep an option of manually triggering the pipeline the give me new fitting job postings.
+- Up to 10 postings are evaluated concurrently in batches (`EVAL_BATCH_SIZE=10`).
+- Each posting runs two eligibility (experience and language) checks concurrently, preceded by a zero-cost regex screening for internships and anti-bot markers.
+- Postings are fetched in batches of 25 across configured locations (`LOCATIONS`, e.g., Netherlands, Spain, Amsterdam, Barcelona, etc.).
+- Daily pagination per location is capped at 1,000 results (`MAX_RESULTS_PER_LOCATION=1000`) to respect upstream LinkedIn limits, tracked persistently in SQLite (`location_scrape_tracking`).
+- Completed skills evaluations can be capped with `TARGET_SKILLS_EVALUATIONS` (defaults to unbounded, scanning all active locations until exhausted or limit reached).
+- Active pipeline executions can be paused/cancelled via `POST /stop-pipeline`.
 - The scheduler requests a run at 07:00 Europe/Amsterdam while active.
 
 The lock, scheduler, and live status are process-local. Background tasks are not a durable queue, and interrupted work is not guaranteed to resume after restart.
 
 ## Persistence and retries
 
-Statuses include `FILTERED_BOT`, `FILTERED_LANG`, `FILTERED_EXP`, `EVALUATED`, and `ERROR_TRANSIENT`.
+Statuses include `FILTERED_BOT`, `FILTERED_INTERN`, `FILTERED_LANG`, `FILTERED_EXP`, `EVALUATED`, and `ERROR_TRANSIENT`.
 
 Malformed skills JSON and rubric validation failures are treated as retryable evaluation errors. An `ERROR_TRANSIENT` record makes a rediscovered posting eligible again; it does not itself schedule a retry.
 

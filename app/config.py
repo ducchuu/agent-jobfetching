@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Union
 import json
 
 DEFAULT_LOCATIONS: List[str] = [
@@ -9,9 +9,7 @@ DEFAULT_LOCATIONS: List[str] = [
     "Utrecht",
     "Rotterdam",
     "Delft",
-    "Spain",
-    "Barcelona",
-    "Madrid"
+    "Leiden"
 ]
 
 class Settings(BaseSettings):
@@ -25,7 +23,7 @@ class Settings(BaseSettings):
     CLOUDFLARE_TUNNEL_TOKEN: str = ""
     API_SECRET_KEY: Optional[str] = None
     
-    LOCATIONS: List[str] = Field(default_factory=lambda: list(DEFAULT_LOCATIONS))
+    LOCATIONS: Union[List[str], str] = Field(default_factory=lambda: list(DEFAULT_LOCATIONS))
     MAX_RESULTS_PER_LOCATION: int = 1000
     SCRAPE_BATCH_SIZE: int = 25
     SCRAPE_DELAY_SECONDS: int = 5
@@ -37,12 +35,18 @@ class Settings(BaseSettings):
     def parse_locations(cls, v):
         if isinstance(v, str):
             v = v.strip()
+            if not v:
+                return list(DEFAULT_LOCATIONS)
             if v.startswith("[") and v.endswith("]"):
                 try:
-                    return json.loads(v)
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(loc).strip() for loc in parsed if str(loc).strip()]
                 except Exception:
                     pass
             return [loc.strip() for loc in v.split(",") if loc.strip()]
+        if isinstance(v, list):
+            return [str(loc).strip() for loc in v if str(loc).strip()]
         return v
     
     model_config = {"env_file": ".env", "extra": "ignore"}

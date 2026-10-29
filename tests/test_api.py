@@ -68,3 +68,47 @@ def test_location_stats_api_key_protection():
     assert "configured_locations" in data
     assert "Netherlands" in data["configured_locations"]
     assert "Spain" in data["configured_locations"]
+
+def test_stop_pipeline_endpoint_idle():
+    from app.main import pipeline_lock
+    assert not pipeline_lock.locked()
+    resp = client.post("/stop-pipeline")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "idle"
+
+def test_stop_pipeline_endpoint_running():
+    from app.main import pipeline_lock, stop_pipeline_event
+    with patch.object(pipeline_lock, 'locked', return_value=True):
+        stop_pipeline_event.clear()
+        resp = client.post("/stop-pipeline")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "stopping"
+        assert stop_pipeline_event.is_set()
+        stop_pipeline_event.clear()
+
+@patch('app.config.settings.API_SECRET_KEY', "secret-key-123")
+@patch('app.main.settings.API_SECRET_KEY', "secret-key-123")
+def test_stop_pipeline_api_key_protection():
+    resp = client.post("/stop-pipeline")
+    assert resp.status_code == 403
+
+    resp = client.post("/stop-pipeline", headers={"X-API-Key": "wrong-key"})
+    assert resp.status_code == 403
+
+    resp = client.post("/stop-pipeline", headers={"X-API-Key": "secret-key-123"})
+    assert resp.status_code == 200
+
+def test_settings_locations_parsing():
+    from app.config import Settings, DEFAULT_LOCATIONS
+    s_example = Settings(_env_file=".env.example")
+    assert s_example.LOCATIONS == DEFAULT_LOCATIONS
+
+    s_empty = Settings(LOCATIONS="")
+    assert s_empty.LOCATIONS == DEFAULT_LOCATIONS
+
+    s_csv = Settings(LOCATIONS="Netherlands, Spain, Barcelona")
+    assert s_csv.LOCATIONS == ["Netherlands", "Spain", "Barcelona"]
+
+    s_json = Settings(LOCATIONS='["Delft", "Rotterdam"]')
+    assert s_json.LOCATIONS == ["Delft", "Rotterdam"]
+

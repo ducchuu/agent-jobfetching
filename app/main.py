@@ -146,11 +146,11 @@ async def run_job_matching_pipeline():
                         reason_lower = (match_result.reasoning or "").lower()
                         if "anti-bot" in reason_lower or "captcha" in reason_lower:
                             filter_status = STATUS_FILTERED_BOT
-                        elif "internship" in reason_lower or "intern" in reason_lower:
+                        elif "internship filter" in reason_lower:
                             filter_status = STATUS_FILTERED_INTERN
-                        elif "language" in reason_lower:
+                        elif "language filter" in reason_lower:
                             filter_status = STATUS_FILTERED_LANG
-                        elif "experience" in reason_lower:
+                        elif "experience filter" in reason_lower:
                             filter_status = STATUS_FILTERED_EXP
                         else:
                             filter_status = STATUS_EVALUATED
@@ -301,6 +301,10 @@ async def run_job_matching_pipeline():
                     logger.info(f"[{loc}] Scraper returned {len(jobs)} jobs (total today: {results_fetched_today}). Evaluating...")
 
                     for i in range(0, len(jobs), eval_batch_size):
+                        if stop_pipeline_event.is_set():
+                            logger.info("Stop requested via /stop-pipeline. Halting job evaluations...")
+                            aborted_message = "Stopped manually via /stop-pipeline."
+                            break
                         if settings.TARGET_SKILLS_EVALUATIONS and skills_evaluated_count >= settings.TARGET_SKILLS_EVALUATIONS:
                             logger.info(f"Reached overall target of {settings.TARGET_SKILLS_EVALUATIONS} skills evaluations. Stopping.")
                             break
@@ -314,6 +318,11 @@ async def run_job_matching_pipeline():
 
                     if is_loc_now_exhausted:
                         logger.info(f"[{loc}] Reached maximum results limit ({max_results_per_loc}) for today.")
+
+                    if aborted_message or stop_pipeline_event.is_set():
+                        if stop_pipeline_event.is_set() and not aborted_message:
+                            aborted_message = "Stopped manually via /stop-pipeline."
+                        break
 
                     logger.info(f"Pausing {scrape_delay}s before next location in cycle...")
                     await asyncio.sleep(scrape_delay)
@@ -366,7 +375,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
-app = FastAPI(title="Job Postings Fetching Agent", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Job Postings Fetching Agent", version="1.1.0", lifespan=lifespan)
 
 @app.post("/upload-cv", dependencies=[Depends(verify_api_key)])
 async def upload_cv(file: UploadFile = File(...)):

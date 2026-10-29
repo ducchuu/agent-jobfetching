@@ -1,4 +1,4 @@
-# AI Job Fetching Agent
+# Automated Job Data Scraping & Analysis Pipeline
 
 A self-hosted job-discovery service that turns a CV into a structured candidate profile, evaluates scraped job postings, and sends relevant opportunities to Discord.
 
@@ -71,15 +71,20 @@ curl --fail-with-body --silent --show-error \
 
 curl --fail-with-body --silent --show-error \
   -X POST http://127.0.0.1:8000/trigger-pipeline
+
+# To halt an active pipeline run prematurely:
+curl --fail-with-body --silent --show-error \
+  -X POST http://127.0.0.1:8000/stop-pipeline
 ```
 
-These examples assume application authentication is disabled for local use. If `API_SECRET_KEY` is set, add `-H 'X-API-Key: YOUR_API_SECRET_KEY'` to protected requests.
+These examples assume application authentication is disabled for local use. If `API_SECRET_KEY` is set, add `-H 'X-API-Key: YOUR_API_SECRET_KEY'` to protected requests (`/upload-cv`, `/trigger-pipeline`, `/stop-pipeline`, `/profile`, `/location-stats`).
 
 ```bash
 curl --fail-with-body --silent --show-error \
   http://127.0.0.1:8000/pipeline-status
 
-docker compose logs -f api
+curl --fail-with-body --silent --show-error \
+  http://127.0.0.1:8000/location-stats
 ```
 
 A successful trigger response requests background execution; it does not confirm successful completion.
@@ -95,7 +100,7 @@ python -m pip install -r requirements.txt
 python -m pytest
 ```
 
-The default suite uses mocked external integrations and is intended to run without provider credentials or live API calls. The reported local result is 31 passed with three live integration tests deselected. Check [GitHub Actions](https://github.com/ducchuu/agent-jobfetching/actions) for results on the current revision.
+The default suite uses mocked external integrations and is intended to run without provider credentials or live API calls. The reported local result is 48 passed with three live integration tests deselected. Check [GitHub Actions](https://github.com/ducchuu/agent-jobfetching/actions) for results on the current revision.
 
 To select live integration tests after configuring credentials:
 
@@ -109,7 +114,9 @@ Live tests can incur charges. For local API development, configure `.env` and ru
 
 - One profile, one process: scheduling, locking, and live status are process-local.
 - Runs are scheduled at 07:00 Europe/Amsterdam while the service is active; manual runs are also supported.
-- Target is 25 evaluations after entry filters (after language and experience agent scan fetched job postings, not raw postings): The pipeline paginates through as many raw postings as needed (often 50–100+ listings). Roles rejected by language, experience, or anti-bot filters do not count toward this target. It only stops once at least 25 postings successfully pass the entry filters and complete skills agent evaluation.
+- **Multi-location round-robin pipeline**: The pipeline cycles across configured search locations (`LOCATIONS`, e.g., Netherlands, Amsterdam, Utrecht, Rotterdam, Delft). For each location, it fetches up to `MAX_RESULTS_PER_LOCATION` (capped at 1,000 to respect LinkedIn pagination limits) per day, tracked in SQLite (`location_scrape_tracking`).
+- **Zero-cost early filtering**: Roles matching anti-bot pages, internship/trainee keywords in English/Dutch/Spanish (`STATUS_FILTERED_INTERN`), language requirements, or experience levels are screened out before expensive LLM skills evaluations.
+- **Configurable target evaluations**: `TARGET_SKILLS_EVALUATIONS` (optional) sets a daily cap on completed skills evaluations; by default, the pipeline continues through all active locations until listings are exhausted or hit daily limits.
 - Filters and audits can be wrong; inspect the original posting. The audit is best-effort and failures retain the initial result.
 - The current experience policy is tailored to entry-level roles (`target_yoe=0`).
 - Scraping depends on upstream sites, rate limits, and available text. Follow applicable terms and data-use requirements.
@@ -118,6 +125,7 @@ Live tests can incur charges. For local API development, configure `.env` and ru
 
 ## Documentation
 
+- [Release Notes v1.1.0](docs/RELEASE_NOTES_v1.1.0.md)
 - [Architecture, scoring, and reliability](docs/architecture.md)
 - [Deployment, access control, and maintenance](docs/deployment.md)
 - [Privacy and data lifecycle](docs/privacy-and-data.md)

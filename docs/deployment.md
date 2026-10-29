@@ -28,7 +28,7 @@ Cloudflare Access plus application authentication can provide additional protect
 
 ### Application authentication
 
-Set `API_SECRET_KEY` to enable checks on `/profile`, `/upload-cv`, and `/trigger-pipeline`. These require `X-API-Key` and reject missing/incorrect keys with 403. An empty secret disables that application check. `/` and `/pipeline-status` remain public at application level; protect them externally if needed.
+Set `API_SECRET_KEY` to enable checks on `/profile`, `/upload-cv`, `/trigger-pipeline`, `/stop-pipeline`, and `/location-stats`. These require `X-API-Key` and reject missing/incorrect keys with 403. An empty secret disables that application check. `/` and `/pipeline-status` remain public at application level; protect them externally if needed.
 
 ```bash
 curl --fail-with-body --silent --show-error \
