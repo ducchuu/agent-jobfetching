@@ -126,15 +126,15 @@ def test_location_scrape_tracking():
     assert stats["is_exhausted"] is True
     
     # Add another location
-    record_location_daily_scrape("Madrid", results_fetched=25, offset=25, is_exhausted=False, date_str=date_str)
+    record_location_daily_scrape("Utrecht", results_fetched=25, offset=25, is_exhausted=False, date_str=date_str)
     
     all_stats = get_all_daily_location_stats(date_str=date_str)
     assert "Amsterdam" in all_stats
-    assert "Madrid" in all_stats
+    assert "Utrecht" in all_stats
     assert all_stats["Amsterdam"]["results_fetched"] == 50
     assert all_stats["Amsterdam"]["is_exhausted"] is True
-    assert all_stats["Madrid"]["results_fetched"] == 25
-    assert all_stats["Madrid"]["is_exhausted"] is False
+    assert all_stats["Utrecht"]["results_fetched"] == 25
+    assert all_stats["Utrecht"]["is_exhausted"] is False
     
     # Date isolation: next day should be fresh
     tomorrow_stats = get_location_daily_stats("Amsterdam", date_str="2026-10-29")

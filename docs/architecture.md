@@ -62,7 +62,7 @@ Mocked audit tests establish prompt contents and response handling. They do not 
 
 - Up to 10 postings are evaluated concurrently in batches (`EVAL_BATCH_SIZE=10`).
 - Each posting runs two eligibility (experience and language) checks concurrently, preceded by a zero-cost regex screening for internships and anti-bot markers.
-- Postings are fetched in batches of 25 across configured locations (`LOCATIONS`, e.g., Netherlands, Spain, Amsterdam, Barcelona, etc.).
+- Postings are fetched in batches of 25 across configured locations (`LOCATIONS`, e.g., Netherlands, Amsterdam, Utrecht, Rotterdam, Delft, Leiden, etc.).
 - Daily pagination per location is capped at 1,000 results (`MAX_RESULTS_PER_LOCATION=1000`) to respect upstream LinkedIn limits, tracked persistently in SQLite (`location_scrape_tracking`).
 - Completed skills evaluations can be capped with `TARGET_SKILLS_EVALUATIONS` (defaults to unbounded, scanning all active locations until exhausted or limit reached).
 - Active pipeline executions can be paused/cancelled via `POST /stop-pipeline`.

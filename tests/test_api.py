@@ -67,7 +67,7 @@ def test_location_stats_api_key_protection():
     assert "date" in data
     assert "configured_locations" in data
     assert "Netherlands" in data["configured_locations"]
-    assert "Spain" in data["configured_locations"]
+    assert "Leiden" in data["configured_locations"]
 
 def test_stop_pipeline_endpoint_idle():
     from app.main import pipeline_lock
@@ -106,8 +106,8 @@ def test_settings_locations_parsing():
     s_empty = Settings(LOCATIONS="")
     assert s_empty.LOCATIONS == DEFAULT_LOCATIONS
 
-    s_csv = Settings(LOCATIONS="Netherlands, Spain, Barcelona")
-    assert s_csv.LOCATIONS == ["Netherlands", "Spain", "Barcelona"]
+    s_csv = Settings(LOCATIONS="Netherlands, Amsterdam, Utrecht")
+    assert s_csv.LOCATIONS == ["Netherlands", "Amsterdam", "Utrecht"]
 
     s_json = Settings(LOCATIONS='["Delft", "Rotterdam"]')
     assert s_json.LOCATIONS == ["Delft", "Rotterdam"]

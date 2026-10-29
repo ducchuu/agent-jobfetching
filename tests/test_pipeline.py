@@ -61,23 +61,23 @@ async def test_pipeline_multi_location_and_limit_switching(tmp_path):
                 return [sample_job]
             # Offset reached or returns empty
             return []
-        elif location == "Spain":
+        elif location == "Rotterdam":
             if offset == 0:
                 return [
                     JobPosting(
-                        id="job_es_1",
+                        id="job_rot_1",
                         title="AI Engineer",
-                        company="MadridAI",
-                        description="AI role in Spain",
+                        company="RotterdamAI",
+                        description="AI role in Rotterdam",
                         url="https://example.com/job2",
-                        location="Spain"
+                        location="Rotterdam"
                     )
                 ]
             return []
         return []
 
     with patch('app.core.database.DB_PATH', test_db), \
-         patch('app.main.settings.LOCATIONS', ["Netherlands", "Spain"]), \
+         patch('app.main.settings.LOCATIONS', ["Netherlands", "Rotterdam"]), \
          patch('app.main.settings.MAX_RESULTS_PER_LOCATION', 25), \
          patch('app.main.check_network_connectivity', AsyncMock(return_value=True)), \
          patch('app.main.os.path.exists', return_value=True), \
@@ -93,16 +93,16 @@ async def test_pipeline_multi_location_and_limit_switching(tmp_path):
         # Both locations should have been queried
         loc_names = [loc for loc, _ in fetched_locations]
         assert "Netherlands" in loc_names
-        assert "Spain" in loc_names
+        assert "Rotterdam" in loc_names
 
         # Daily stats should be tracked for both
         today = get_today_date_str()
         nl_stats = get_location_daily_stats("Netherlands", date_str=today)
-        es_stats = get_location_daily_stats("Spain", date_str=today)
+        rot_stats = get_location_daily_stats("Rotterdam", date_str=today)
         assert nl_stats["results_fetched"] == 1
-        assert es_stats["results_fetched"] == 1
+        assert rot_stats["results_fetched"] == 1
         assert nl_stats["is_exhausted"] is True
-        assert es_stats["is_exhausted"] is True
+        assert rot_stats["is_exhausted"] is True
 
 @pytest.mark.asyncio
 async def test_pipeline_skips_exhausted_location_and_resumes(tmp_path):

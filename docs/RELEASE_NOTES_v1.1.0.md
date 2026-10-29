@@ -7,12 +7,12 @@
 
 ## Highlights
 
-The **v1.1.0** release significantly expands the search reach and performance of the AI Job Fetching Agent. It introduces multi-location round-robin scraping across the Netherlands and Spain, persistent daily pagination tracking up to LinkedIn's 1,000-result cap, zero-cost multi-lingual internship filtering, and new control endpoints.
+The **v1.1.0** release significantly expands the search reach and performance of the AI Job Fetching Agent. It introduces multi-location round-robin scraping across targeted Dutch regions, persistent daily pagination tracking up to LinkedIn's 1,000-result cap, zero-cost multi-lingual internship filtering, and new control endpoints.
 
 ### What's New
 
 - **Multi-Location Round-Robin Scraping**:
-  - Automatically queries across configured target locations (`LOCATIONS`, default: Netherlands, Amsterdam, Utrecht, Rotterdam, Delft, Spain, Barcelona, Madrid).
+  - Automatically queries across configured target locations (`LOCATIONS`, default: Netherlands, Amsterdam, Utrecht, Rotterdam, Delft, Leiden).
   - Robust location parsing supporting comma-separated lists, JSON arrays, and `.env.example` empty-string defaults.
   - Automatic country resolution for Indeed (`resolve_country_indeed`) ensuring correct country domains per city.
   - Freshness window set to 72 hours for high-relevance job discovery.

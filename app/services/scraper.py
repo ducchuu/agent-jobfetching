@@ -9,15 +9,6 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 COUNTRY_CITY_MAP = {
-    # Spain
-    "spain": "Spain",
-    "barcelona": "Spain",
-    "madrid": "Spain",
-    "valencia": "Spain",
-    "seville": "Spain",
-    "sevilla": "Spain",
-    "malaga": "Spain",
-    "bilbao": "Spain",
     # Netherlands
     "netherlands": "Netherlands",
     "nederland": "Netherlands",
