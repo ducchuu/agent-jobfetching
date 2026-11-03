@@ -140,6 +140,7 @@ model_list = [
 ]
 
 GOOGLE_TO_OPENAI_FALLBACK = {
+    "gemini-3.8-flash": "gpt-6-luna",
     "gemini-3.6-flash": "gpt-6-luna",
     "gemini-4-argon": "gpt-6.1-sol",
 }
@@ -157,7 +158,7 @@ def _messages_to_contents(messages, contents) -> str:
 
 class GooglePrimaryRouter:
     """
-    Routes primary LLM requests to Google Vertex AI (gemini-3.6-flash / gemini-4-argon)
+    Routes primary LLM requests to Google Vertex AI (gemini-3.8-flash / gemini-4-argon)
     using google.genai.Client, and falls back to OpenAI models (gpt-6-luna / gpt-6.1-sol)
     via LiteLLM if the Google model call fails.
     """

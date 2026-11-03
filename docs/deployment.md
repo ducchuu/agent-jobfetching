@@ -16,7 +16,7 @@ Never commit `.env`. Verify `.dockerignore` excludes credentials, virtual enviro
 
 ### Google Vertex AI Authentication (`google-genai`)
 
-The pipeline uses Google Vertex AI (`gemini-3.6-flash` and `gemini-4-argon`) as the default LLM provider and OpenAI (`gpt-6-luna` and `gpt-6.1-sol`) as the fallback.
+The pipeline uses Google Vertex AI (`gemini-3.8-flash` and `gemini-4-argon`) as the default LLM provider and OpenAI (`gpt-6-luna` and `gpt-6.1-sol`) as the fallback.
 
 1. **Running Directly on Ubuntu**:
    If you execute the Python script natively (or via a local virtual environment) under your `mikolaj_admin` user, no extra credential path configuration is needed. The SDK checks `~/.config/gcloud/application_default_credentials.json` by default.

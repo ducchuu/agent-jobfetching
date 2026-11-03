@@ -10,12 +10,13 @@ DEFAULT_LOCATIONS: List[str] = [
     "Rotterdam",
     "Delft",
     "Leiden",
-    "Poland"
+    "Poland",
+    "Barcelona"
 ]
 
 class Settings(BaseSettings):
     GCP_PROJECT_ID: str = "your-project-id"
-    GCP_LOCATION: str = "us-central1"
+    GCP_LOCATION: str = "global"
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     OPENAI_API_KEY: str = ""
     LANGFUSE_SECRET_KEY: Optional[str] = None
@@ -37,8 +38,8 @@ class Settings(BaseSettings):
     @classmethod
     def parse_gcp_location(cls, v):
         if isinstance(v, str) and not v.strip():
-            return "us-central1"
-        return v or "us-central1"
+            return "global"
+        return v or "global"
 
     @field_validator("LOCATIONS", mode="before")
     @classmethod

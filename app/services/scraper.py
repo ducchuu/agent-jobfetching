@@ -30,6 +30,13 @@ COUNTRY_CITY_MAP = {
     "kraków": "Poland",
     "wroclaw": "Poland",
     "wrocław": "Poland",
+    # Spain
+    "spain": "Spain",
+    "espana": "Spain",
+    "españa": "Spain",
+    "barcelona": "Spain",
+    "madrid": "Spain",
+    "valencia": "Spain",
 }
 
 def resolve_country_indeed(location: str) -> str:

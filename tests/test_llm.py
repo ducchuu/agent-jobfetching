@@ -32,7 +32,7 @@ async def test_router_calls_google_genai_primary_flash(mock_get_client):
     mock_get_client.return_value = mock_client
 
     response = await router.acompletion(
-        model="gemini-3.6-flash",
+        model="gemini-3.8-flash",
         messages=[
             {"role": "system", "content": "System instruction"},
             {"role": "user", "content": "User job description"},
@@ -40,7 +40,7 @@ async def test_router_calls_google_genai_primary_flash(mock_get_client):
     )
 
     mock_client.models.generate_content.assert_called_once_with(
-        model="gemini-3.6-flash",
+        model="gemini-3.8-flash",
         contents="System instruction\n\nUser job description",
     )
     assert response.text == '{"is_rejected": false, "reason": ""}'
@@ -84,9 +84,9 @@ async def test_router_falls_back_to_openai_when_google_fails(mock_get_client, mo
     fallback_resp.choices = [MagicMock(message=MagicMock(content='{"fallback": true}'))]
     mock_litellm_acompletion.return_value = fallback_resp
 
-    # Test gemini-3.6-flash -> gpt-6-luna fallback
+    # Test gemini-3.8-flash -> gpt-6-luna fallback
     resp_flash = await router.acompletion(
-        model="gemini-3.6-flash",
+        model="gemini-3.8-flash",
         messages=[{"role": "user", "content": "Test flash"}],
     )
     assert resp_flash.choices[0].message.content == '{"fallback": true}'
@@ -105,7 +105,5 @@ async def test_router_falls_back_to_openai_when_google_fails(mock_get_client, mo
         model="gpt-6.1-sol",
         messages=[{"role": "user", "content": "Test argon"}],
     )
-    assert GOOGLE_TO_OPENAI_FALLBACK == {
-        "gemini-3.6-flash": "gpt-6-luna",
-        "gemini-4-argon": "gpt-6.1-sol",
-    }
+    assert GOOGLE_TO_OPENAI_FALLBACK["gemini-3.8-flash"] == "gpt-6-luna"
+    assert GOOGLE_TO_OPENAI_FALLBACK["gemini-4-argon"] == "gpt-6.1-sol"

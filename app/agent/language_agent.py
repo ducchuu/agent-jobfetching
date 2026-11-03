@@ -62,7 +62,7 @@ RULES:
     try:
         import re
         response = await router.acompletion(
-            model="gemini-3.6-flash",
+            model="gemini-3.8-flash",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
