@@ -68,6 +68,7 @@ def test_location_stats_api_key_protection():
     assert "configured_locations" in data
     assert "Netherlands" in data["configured_locations"]
     assert "Leiden" in data["configured_locations"]
+    assert "Poland" in data["configured_locations"]
 
 def test_stop_pipeline_endpoint_idle():
     from app.main import pipeline_lock

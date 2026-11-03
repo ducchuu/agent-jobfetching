@@ -21,6 +21,15 @@ COUNTRY_CITY_MAP = {
     "den haag": "Netherlands",
     "groningen": "Netherlands",
     "leiden": "Netherlands",
+    # Poland
+    "poland": "Poland",
+    "polska": "Poland",
+    "warsaw": "Poland",
+    "warszawa": "Poland",
+    "krakow": "Poland",
+    "kraków": "Poland",
+    "wroclaw": "Poland",
+    "wrocław": "Poland",
 }
 
 def resolve_country_indeed(location: str) -> str:

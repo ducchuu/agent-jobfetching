@@ -114,7 +114,7 @@ Live tests can incur charges. For local API development, configure `.env` and ru
 
 - One profile, one process: scheduling, locking, and live status are process-local.
 - Runs are scheduled at 07:00 Europe/Amsterdam while the service is active; manual runs are also supported.
-- **Multi-location round-robin pipeline**: The pipeline cycles across configured search locations (`LOCATIONS`, e.g., Netherlands, Amsterdam, Utrecht, Rotterdam, Delft). For each location, it fetches up to `MAX_RESULTS_PER_LOCATION` (capped at 1,000 to respect LinkedIn pagination limits) per day, tracked in SQLite (`location_scrape_tracking`).
+- **Multi-location round-robin pipeline**: The pipeline cycles across configured search locations (`LOCATIONS`, e.g., Netherlands, Amsterdam, Utrecht, Rotterdam, Delft, Leiden, Poland). For each location, it fetches up to `MAX_RESULTS_PER_LOCATION` (capped at 1,000 to respect LinkedIn pagination limits) per day, tracked in SQLite (`location_scrape_tracking`).
 - **Zero-cost early filtering**: Roles matching anti-bot pages, internship/trainee keywords in English/Dutch/Spanish (`STATUS_FILTERED_INTERN`), language requirements, or experience levels are screened out before expensive LLM skills evaluations.
 - **Configurable target evaluations**: `TARGET_SKILLS_EVALUATIONS` (optional) sets a daily cap on completed skills evaluations; by default, the pipeline continues through all active locations until listings are exhausted or hit daily limits.
 - Filters and audits can be wrong; inspect the original posting. The audit is best-effort and failures retain the initial result.

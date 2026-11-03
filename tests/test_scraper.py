@@ -116,6 +116,9 @@ def test_resolve_country_indeed():
     assert resolve_country_indeed("Rotterdam") == "Netherlands"
     assert resolve_country_indeed("Delft") == "Netherlands"
     assert resolve_country_indeed("Leiden") == "Netherlands"
+    assert resolve_country_indeed("Poland") == "Poland"
+    assert resolve_country_indeed("Warsaw") == "Poland"
+    assert resolve_country_indeed("Krakow") == "Poland"
     assert resolve_country_indeed("CustomLand") == "CustomLand"
 
 @patch('app.services.scraper.scrape_jobs')

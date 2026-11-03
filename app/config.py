@@ -9,7 +9,8 @@ DEFAULT_LOCATIONS: List[str] = [
     "Utrecht",
     "Rotterdam",
     "Delft",
-    "Leiden"
+    "Leiden",
+    "Poland"
 ]
 
 class Settings(BaseSettings):
