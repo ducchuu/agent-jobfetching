@@ -25,8 +25,9 @@ jobs:
 
       - name: Run offline unit test suite
         env:
+          GCP_PROJECT_ID: "mock-gcp-project"
+          GCP_LOCATION: "us-central1"
           OPENAI_API_KEY: "mock-openai-key"
-          ANTHROPIC_API_KEY: "mock-anthropic-key"
           DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/mock"
         run: |
           pytest

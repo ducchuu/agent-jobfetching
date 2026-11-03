@@ -41,7 +41,7 @@ The diagram shows the main path, not every error branch. See [architecture and s
 ### Requirements
 
 - Git and Docker Compose v2.
-- OpenAI and Anthropic credentials for the configured model routes.
+- Google Cloud Vertex AI Application Default Credentials (`application_default_credentials.json`) and `GCP_PROJECT_ID` for the default Gemini models (`gemini-3.6-flash` and `gemini-4-argon`), plus OpenAI credentials (`OPENAI_API_KEY`) for the fallback routes.
 - A Discord webhook URL for notifications.
 
 CV parsing and pipeline execution invoke paid external APIs. There is no cumulative daily spending cap.
@@ -54,7 +54,7 @@ cd agent-jobfetching
 cp .env.example .env
 ```
 
-Fill in `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `DISCORD_WEBHOOK_URL`. Review the other settings in `.env.example`, including `MATCH_THRESHOLD` and optional tracing.
+Fill in `GCP_PROJECT_ID`, `OPENAI_API_KEY`, and `DISCORD_WEBHOOK_URL`. Ensure `/home/mikolaj_admin/.config/gcloud/application_default_credentials.json` (or custom `GCP_ADC_PATH`) exists on the host for Docker volume mounting. Review the other settings in `.env.example`, including `MATCH_THRESHOLD` and optional tracing.
 
 ```bash
 docker compose up -d --build

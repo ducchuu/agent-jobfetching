@@ -24,8 +24,9 @@ jobs:
 
       - name: Run offline unit test suite
         env:
+          GCP_PROJECT_ID: "mock-gcp-project"
+          GCP_LOCATION: "us-central1"
           OPENAI_API_KEY: "mock-openai-key"
-          ANTHROPIC_API_KEY: "mock-anthropic-key"
           DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/mock"
         run: |
           pytest
@@ -40,8 +41,9 @@ jobs:
 
       - name: Create .env file
         run: |
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
-          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+          echo "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" > .env
+          echo "GCP_LOCATION=${{ secrets.GCP_LOCATION }}" >> .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           echo "LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}" >> .env
           echo "LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}" >> .env
           echo "LANGFUSE_HOST=${{ secrets.LANGFUSE_HOST }}" >> .env

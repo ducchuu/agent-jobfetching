@@ -42,7 +42,7 @@ For any 'is_rejected' = false, leave 'reason' as an empty string."""
 
     try:
         response = await router.acompletion(
-            model="gpt-6-luna",
+            model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -51,7 +51,7 @@ For any 'is_rejected' = false, leave 'reason' as an empty string."""
             reasoning_effort="none",
             max_tokens=1024
         )
-        content = (response.choices[0].message.content or "").strip()
+        content = (getattr(response, "text", None) or response.choices[0].message.content or "").strip()
         match = re.search(r"\{[\s\S]*\}", content)
         if match:
             content = match.group(0)

@@ -9,8 +9,11 @@ services:
       - "127.0.0.1:8000:8000"
     env_file:
       - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/etc/gcp/adc.json
     volumes:
       - db_data:/app/data
+      - ${GCP_ADC_PATH:-/home/mikolaj_admin/.config/gcloud/application_default_credentials.json}:/etc/gcp/adc.json:ro
 
   cloudflared:
     image: cloudflare/cloudflared:latest

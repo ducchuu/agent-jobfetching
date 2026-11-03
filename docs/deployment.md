@@ -14,6 +14,27 @@ Use `127.0.0.1:8000:8000` for the host port. Run one application process and one
 
 Never commit `.env`. Verify `.dockerignore` excludes credentials, virtual environments, profiles, databases, and CVs before building; `COPY . .` otherwise includes eligible build-context files.
 
+### Google Vertex AI Authentication (`google-genai`)
+
+The pipeline uses Google Vertex AI (`gemini-3.6-flash` and `gemini-4-argon`) as the default LLM provider and OpenAI (`gpt-6-luna` and `gpt-6.1-sol`) as the fallback.
+
+1. **Running Directly on Ubuntu**:
+   If you execute the Python script natively (or via a local virtual environment) under your `mikolaj_admin` user, no extra credential path configuration is needed. The SDK checks `~/.config/gcloud/application_default_credentials.json` by default.
+2. **Running in a Docker Container**:
+   Containers cannot see host files by default. `docker-compose.yml` mounts `/home/mikolaj_admin/.config/gcloud/application_default_credentials.json` (or `GCP_ADC_PATH` if overridden) as a read-only volume at `/etc/gcp/adc.json` and sets `GOOGLE_APPLICATION_CREDENTIALS=/etc/gcp/adc.json`.
+   If running `docker run` directly:
+   ```bash
+   docker run \
+     -v /home/mikolaj_admin/.config/gcloud/application_default_credentials.json:/etc/gcp/adc.json:ro \
+     -e GOOGLE_APPLICATION_CREDENTIALS=/etc/gcp/adc.json \
+     your-image-name
+   ```
+3. **Running as a Systemd Background Service**:
+   If the project runs automatically on boot via a systemd service, explicitly define the credentials path in the `[Service]` section of your `.service` file:
+   ```ini
+   Environment="GOOGLE_APPLICATION_CREDENTIALS=/home/mikolaj_admin/.config/gcloud/application_default_credentials.json"
+   ```
+
 ## Access-control boundary
 
 A tunnel, a home-server location, and a localhost-only host port are not visitor authentication. A public tunnel route can expose the service through the tunnel even when direct host access is restricted.

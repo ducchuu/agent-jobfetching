@@ -14,8 +14,8 @@ The profile can contain a name, qualifications, languages, project descriptions,
 
 | Destination | Data and purpose |
 |---|---|
-| Anthropic | Extracted CV text during profile parsing; evaluation data when configured routes/fallbacks use Anthropic |
-| OpenAI | Qualifications, languages, projects, experience summaries, target titles, and job text during configured evaluation calls |
+| Google Cloud Vertex AI | Extracted CV text during profile parsing; qualifications, languages, projects, experience summaries, target titles, and job text during primary evaluation calls (`gemini-3.6-flash` and `gemini-4-argon`) |
+| OpenAI | Fallback evaluation calls (`gpt-6-luna` and `gpt-6.1-sol`) when primary Google Vertex AI calls fail |
 | Discord | Job details and selected model-generated evaluation fields |
 | Langfuse, when enabled | Execution traces that may include prompts and model completions |
 

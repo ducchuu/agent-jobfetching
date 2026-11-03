@@ -105,7 +105,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
 
     try:
         response = await acompletion(
-            model="gpt-6.1-sol",
+            model="gemini-4-argon",
             messages=[
                 {"role": "system", "content": static_system_content},
                 {"role": "user", "content": dynamic_job_content}
@@ -116,7 +116,7 @@ async def evaluate_skills(candidate_profile: CandidateProfile, job: JobPosting) 
         )
         log_cache_metrics(response)
         
-        content = (response.choices[0].message.content or "").strip()
+        content = (getattr(response, "text", None) or response.choices[0].message.content or "").strip()
         if not content:
             raise EvaluationTransientError("LLM returned empty content from skills agent.")
 

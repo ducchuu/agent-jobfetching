@@ -62,7 +62,7 @@ RULES:
     try:
         import re
         response = await router.acompletion(
-            model="gpt-6-luna",
+            model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -71,7 +71,7 @@ RULES:
             reasoning_effort="none",
             max_tokens=1024
         )
-        content = (response.choices[0].message.content or "").strip()
+        content = (getattr(response, "text", None) or response.choices[0].message.content or "").strip()
         match = re.search(r"\{[\s\S]*\}", content)
         if match:
             content = match.group(0)

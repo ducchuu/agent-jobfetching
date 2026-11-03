@@ -176,7 +176,7 @@ Missing Skills identified: {', '.join(match_result.missing_skills)}
 
     try:
         response = await router.acompletion(
-            model="gpt-6-luna",
+            model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -185,7 +185,7 @@ Missing Skills identified: {', '.join(match_result.missing_skills)}
             reasoning_effort="low",
             max_tokens=1024
         )
-        content = (response.choices[0].message.content or "").strip()
+        content = (getattr(response, "text", None) or response.choices[0].message.content or "").strip()
         match = re.search(r"\{[\s\S]*\}", content)
         if match:
             content = match.group(0)

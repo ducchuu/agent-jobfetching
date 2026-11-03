@@ -39,11 +39,11 @@ DOCUMENT TEXT:
 """
     logger.info("Calling LLM to extract structured candidate profile...")
     response = await router.acompletion(
-        model="claude-5-5-sonnet",
+        model="gemini-4-argon",
         messages=[{"role": "user", "content": prompt}]
     )
     
-    raw_json = (response.choices[0].message.content or "").strip()
+    raw_json = (getattr(response, "text", None) or response.choices[0].message.content or "").strip()
     match = re.search(r"\{[\s\S]*\}", raw_json)
     if match:
         raw_json = match.group(0)

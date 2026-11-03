@@ -13,8 +13,10 @@ DEFAULT_LOCATIONS: List[str] = [
 ]
 
 class Settings(BaseSettings):
+    GCP_PROJECT_ID: str = "your-project-id"
+    GCP_LOCATION: str = "us-central1"
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
@@ -29,6 +31,13 @@ class Settings(BaseSettings):
     SCRAPE_DELAY_SECONDS: int = 5
     EVAL_BATCH_SIZE: int = 10
     TARGET_SKILLS_EVALUATIONS: Optional[int] = None
+
+    @field_validator("GCP_LOCATION", mode="before")
+    @classmethod
+    def parse_gcp_location(cls, v):
+        if isinstance(v, str) and not v.strip():
+            return "us-central1"
+        return v or "us-central1"
 
     @field_validator("LOCATIONS", mode="before")
     @classmethod

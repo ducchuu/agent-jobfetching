@@ -13,6 +13,6 @@ pytest
 pytest-asyncio
 python-multipart
 langdetect
-anthropic
+google-genai
 langgraph
 langchain-core
